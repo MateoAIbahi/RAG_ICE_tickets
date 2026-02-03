@@ -1,0 +1,15 @@
+FROM python:3.11-slim
+# Image Linux avec Python
+
+WORKDIR /app
+# Dossier de travail dans le container
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+# Installe les dépendances
+
+COPY src/ src/
+# Copie ton code
+
+CMD ["python", "-m", "src.api.main"]
+# Lance l’API par défaut

@@ -1,0 +1,7 @@
+fastapi              # API web
+uvicorn             # Serveur ASGI
+pandas              # Lecture Excel
+openpyxl            # Backend Excel
+requests            # Appels HTTP (Microsoft Graph)
+python-dotenv      # Lire le .env
+psycopg2-binary    # Connexion PostgreSQL

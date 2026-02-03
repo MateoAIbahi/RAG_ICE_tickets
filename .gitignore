@@ -1,0 +1,33 @@
+# secrets
+.env
+.env.*
+*.key
+*.pem
+
+# data
+data/
+*.pdf
+*.csv
+*.xlsx
+*.parquet
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# logs & cache
+logs/
+*.log
+.cache/
+tmp/
+
+# editors / os
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
