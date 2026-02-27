@@ -1,35 +1,33 @@
--- Extensions
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- Table documents (chunks)
+-- Chunks + metadata
 CREATE TABLE IF NOT EXISTS documents (
   id BIGSERIAL PRIMARY KEY,
-
-  -- provenance
-  source_type TEXT NOT NULL,              -- 'ticket_csv', 'pdf', etc.
-  source_id   TEXT,                       -- id ticket, nom fichier, etc.
-  source_path TEXT,                       -- chemin fichier si besoin
-  page_num    INTEGER,                    -- pour PDF
-  row_num     INTEGER,                    -- pour CSV
-  chunk_id    TEXT,                       -- ex: "ticket123#chunk04"
-
-  -- contenu
+  source_type TEXT NOT NULL,
+  source_id   TEXT,
+  source_path TEXT,
+  page_num    INTEGER,
+  row_num     INTEGER,
+  chunk_id    TEXT,
   content     TEXT NOT NULL,
-
-  -- métadonnées
-  author      TEXT,
-  doc_date    TIMESTAMPTZ,
   metadata    JSONB DEFAULT '{}'::jsonb,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
 
-  -- embedding
-  embedding   VECTOR(1024),               -- ⚠️ on ajustera la dimension à TON modèle
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  -- 1 vecteur "pooled" (pour préfiltrer vite)
+  pooled_embedding VECTOR(128)
 );
 
--- Indexes utiles
 CREATE INDEX IF NOT EXISTS idx_documents_source ON documents (source_type, source_id);
 CREATE INDEX IF NOT EXISTS idx_documents_metadata_gin ON documents USING GIN (metadata);
 
--- Index vectoriel (à activer quand on aura confirmé le type d’index + dimensions + volume)
--- CREATE INDEX IF NOT EXISTS idx_documents_embedding
--- ON documents USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+-- Multi-vecteurs ColQwen (late interaction)
+CREATE TABLE IF NOT EXISTS document_vectors (
+  document_id BIGINT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  vec_idx     INTEGER NOT NULL,
+  embedding   VECTOR(128) NOT NULL,
+  PRIMARY KEY (document_id, vec_idx)
+);
+
+-- Index ANN sur pooled_embedding
+-- CREATE INDEX IF NOT EXISTS idx_documents_pooled_ann
+-- ON documents USING hnsw (pooled_embedding vector_cosine_ops);
