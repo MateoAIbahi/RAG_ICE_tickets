@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS document_vectors (
   PRIMARY KEY (document_id, vec_idx)
 );
 
+
 -- Index ANN sur pooled_embedding
 -- CREATE INDEX IF NOT EXISTS idx_documents_pooled_ann
 -- ON documents USING hnsw (pooled_embedding vector_cosine_ops);

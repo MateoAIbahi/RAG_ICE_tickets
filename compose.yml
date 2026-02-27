@@ -11,6 +11,14 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./src/db/init:/docker-entrypoint-initdb.d:ro
-
+  ingestion:
+    build:
+      context: .
+      dockerfile: deploy/ingestion.Dockerfile
+    environment:
+      RAG_DATABASE_URL: postgresql://rag:ragpass@db:5432/ragdb
+      ERP_DATABASE_URL: ${ERP_DATABASE_URL-}
+    depends_on:
+      - db
 volumes:
   pgdata:
