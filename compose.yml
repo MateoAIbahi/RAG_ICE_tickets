@@ -20,5 +20,14 @@ services:
       ERP_DATABASE_URL: ${ERP_DATABASE_URL-}
     depends_on:
       - db
+  api:
+    build:
+      context: .
+      dockerfile: deploy/api.Dockerfile
+    container_name: rag_api
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
 volumes:
   pgdata:
