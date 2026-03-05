@@ -29,5 +29,14 @@ services:
       - "8000:8000"
     depends_on:
       - db
+  web:
+    build:
+      context: .
+      dockerfile: deploy/web.Dockerfile
+    container_name: rag_web
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
 volumes:
   pgdata:
