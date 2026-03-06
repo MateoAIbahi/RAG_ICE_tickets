@@ -18,6 +18,12 @@ services:
     environment:
       RAG_DATABASE_URL: postgresql://rag:ragpass@db:5432/ragdb
       ERP_DATABASE_URL: ${ERP_DATABASE_URL-}
+      EMBED_MODEL: Metric-AI/ColQwen2.5-3b-multilingual-v1.0
+      DEVICE: cpu
+      HF_HOME: /models/hf
+      PROBE_ONLY: "1"
+    volumes:
+      - ./models:/models
     depends_on:
       - db
   api:
