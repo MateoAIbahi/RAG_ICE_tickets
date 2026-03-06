@@ -18,9 +18,10 @@ RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/wh
 
 RUN pip install --no-cache-dir \
     pillow \
-    accelerate \
-    "transformers>=4.45.0" \
-    "colpali-engine==0.3.7"
+    accelerate
+
+RUN pip install --no-cache-dir git+https://github.com/huggingface/transformers
+RUN pip install --no-cache-dir git+https://github.com/illuin-tech/colpali@main
 
 COPY src/ /app/src/
 ENV PYTHONPATH=/app
