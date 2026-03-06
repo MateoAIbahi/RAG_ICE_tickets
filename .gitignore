@@ -31,3 +31,6 @@ tmp/
 .idea/
 .DS_Store
 Thumbs.db
+
+
+certs/
