@@ -22,7 +22,7 @@ services:
       DEVICE: cpu
       HF_HOME: /models/hf
       PROBE_ONLY: "1"
-
+      HF_TOKEN : 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
       SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
       REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
       CURL_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
