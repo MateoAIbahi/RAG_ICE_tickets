@@ -1,4 +1,9 @@
 import os
+
+os.environ["SSL_CERT_FILE"] = os.getenv("SSL_CERT_FILE", "/etc/ssl/certs/ca-certificates.crt")
+os.environ["REQUESTS_CA_BUNDLE"] = os.getenv("REQUESTS_CA_BUNDLE", "/etc/ssl/certs/ca-certificates.crt")
+os.environ["CURL_CA_BUNDLE"] = os.getenv("CURL_CA_BUNDLE", "/etc/ssl/certs/ca-certificates.crt")
+
 import time
 import torch
 
