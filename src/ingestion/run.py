@@ -1,65 +1,44 @@
 import os
-from datetime import datetime, timezone
-import psycopg2
+from pathlib import Path
 
-RAG_DATABASE_URL = os.getenv("RAG_DATABASE_URL")
-ERP_DATABASE_URL = os.getenv("ERP_DATABASE_URL")
+from src.ingestion.pdf_ingest import ingest_pdf_file
 
 
-def _connect(url: str, label: str):
-    if not url:
-        print(f"[{label}] DATABASE_URL not set -> skipping")
-        return None
-    conn = psycopg2.connect(url)
-    conn.autocommit = True
-    print(f"[{label}] Connected OK")
-    return conn
+UPLOAD_DIR = Path("/data/uploads")
 
 
 def main():
-    if os.getenv("PROBE_ONLY") == "1":
-        from src.ingestion.probe import run_probe
-        run_probe()
+    print("[INGESTION] Starting PDF ingestion")
+
+    if not UPLOAD_DIR.exists():
+        print("[INGESTION] Upload directory does not exist:", UPLOAD_DIR)
         return
 
-    rag = _connect(RAG_DATABASE_URL, "RAG")
-    if rag is None:
-        raise RuntimeError("RAG_DATABASE_URL is required")
+    pdf_files = list(UPLOAD_DIR.rglob("*.pdf"))
 
-    with rag.cursor() as cur:
-        cur.execute(
-            "SELECT source, last_sync_ts FROM ingestion_state WHERE source=%s",
-            ("erp_sylob",),
-        )
-        row = cur.fetchone()
-        print(f"[RAG] Current state for 'erp_sylob': {row}")
+    if not pdf_files:
+        print("[INGESTION] No PDF files found")
+        return
 
-    now = datetime.now(timezone.utc)
-    with rag.cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO ingestion_state (source, last_sync_ts)
-            VALUES (%s, %s)
-            ON CONFLICT (source) DO UPDATE
-              SET last_sync_ts = EXCLUDED.last_sync_ts,
-                  updated_at = now()
-            """,
-            ("erp_sylob", now),
-        )
-    print(f"[RAG] Updated ingestion_state('erp_sylob') -> {now.isoformat()}")
+    print(f"[INGESTION] {len(pdf_files)} PDF(s) found")
 
-    if ERP_DATABASE_URL:
-        erp = _connect(ERP_DATABASE_URL, "ERP")
-        if erp:
-            with erp.cursor() as cur:
-                cur.execute("SELECT 1;")
-                print("[ERP] SELECT 1 OK")
-            erp.close()
-    else:
-        print("[ERP] Not configured -> skipping")
+    success = 0
+    failed = 0
 
-    rag.close()
-    print("[DONE] Batch ingestion MVP finished")
+    for pdf in pdf_files:
+        print(f"[INGESTION] Processing {pdf}")
+
+        try:
+            ingest_pdf_file(str(pdf))
+            success += 1
+
+        except Exception as e:
+            print(f"[INGESTION] ERROR on {pdf}: {e}")
+            failed += 1
+
+    print("\n[INGESTION] Summary")
+    print("Success:", success)
+    print("Failed :", failed)
 
 
 if __name__ == "__main__":
