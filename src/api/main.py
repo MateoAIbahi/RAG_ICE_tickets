@@ -2,7 +2,7 @@ import os
 import uuid
 from pathlib import Path
 from typing import List, Optional
-
+import json
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -108,9 +108,16 @@ def search(req: SearchRequest):
 
 
 @app.post("/upload-pdf")
-async def upload_pdf(files: List[UploadFile] = File(...)):
+async def upload_pdf(
+    files: List[UploadFile] = File(...),
+    pccn_version: str = None
+):
+
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded")
+
+    if not pccn_version:
+        raise HTTPException(status_code=400, detail="pccn_version missing")
 
     upload_id = f"upload_{uuid.uuid4().hex}"
     upload_path = UPLOAD_DIR / upload_id
@@ -119,21 +126,31 @@ async def upload_pdf(files: List[UploadFile] = File(...)):
     saved_files = []
 
     for file in files:
+
         if not file.filename.lower().endswith(".pdf"):
             raise HTTPException(
                 status_code=400,
                 detail=f"{file.filename} is not a PDF",
             )
 
-        dest = upload_path / file.filename
+        pdf_path = upload_path / file.filename
 
-        with dest.open("wb") as buffer:
+        with pdf_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        saved_files.append(str(dest))
+        # metadata file
+        meta_path = upload_path / f"{file.filename}.meta.json"
+
+        with meta_path.open("w") as f:
+            json.dump({
+                "pccn_version": pccn_version
+            }, f)
+
+        saved_files.append(str(pdf_path))
 
     return {
         "message": "Upload successful",
+        "pccn_version": pccn_version,
         "upload_dir": str(upload_path),
-        "files": saved_files,
+        "files": saved_files
     }

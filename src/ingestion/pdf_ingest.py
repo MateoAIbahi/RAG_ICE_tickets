@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-
+import json
 import fitz  # PyMuPDF
 import psycopg2
 import torch
@@ -15,6 +15,23 @@ def get_rag_conn():
     conn.autocommit = True
     return conn
 
+def read_pdf_metadata(pdf_path: Path):
+
+    meta_file = pdf_path.parent / f"{pdf_path.name}.meta.json"
+
+    if not meta_file.exists():
+        print(f"[PDF] Metadata not found for {pdf_path}")
+        return None
+
+    try:
+        with meta_file.open() as f:
+            data = json.load(f)
+
+        return data.get("pccn_version")
+
+    except Exception as e:
+        print(f"[PDF] Error reading metadata {meta_file}: {e}")
+        return None
 
 def load_model():
     model_name = os.getenv("EMBED_MODEL", "Metric-AI/ColQwen2.5-3b-multilingual-v1.0")
@@ -95,6 +112,7 @@ def insert_document(
     chunk_id: str,
     content: str,
     pooled_embedding: list,
+    pccn_version: str,
 ):
     with conn.cursor() as cur:
         cur.execute(
@@ -106,15 +124,17 @@ def insert_document(
                 page_num,
                 chunk_id,
                 content,
-                pooled_embedding
+                pooled_embedding,
+                pccn_version
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s::vector)
+            VALUES (%s, %s, %s, %s, %s, %s, %s::vector,%s)
             ON CONFLICT (source_type, source_id, chunk_id)
             DO UPDATE SET
                 source_path = EXCLUDED.source_path,
                 page_num = EXCLUDED.page_num,
                 content = EXCLUDED.content,
-                pooled_embedding = EXCLUDED.pooled_embedding
+                pooled_embedding = EXCLUDED.pooled_embedding,
+                pccn_version = EXCLUDED.pccn_version
             """,
             (
                 "pdf",
@@ -124,6 +144,7 @@ def insert_document(
                 chunk_id,
                 content,
                 str(pooled_embedding),
+                pccn_version
             ),
         )
 
@@ -145,7 +166,7 @@ def ingest_pdf_file(pdf_path: str):
 
     source_id = pdf_path.stem
     source_path = pdf_path.name
-
+    pccn_version = read_pdf_metadata(pdf_path)
     pages = render_pdf_pages(pdf_path)
 
     if not pages:
@@ -173,6 +194,7 @@ def ingest_pdf_file(pdf_path: str):
                 chunk_id=chunk_id,
                 content=content,
                 pooled_embedding=pooled_embedding,
+                pccn_version=pccn_version,
             )
 
             print(f"[PDF] Insert OK: {chunk_id}")
