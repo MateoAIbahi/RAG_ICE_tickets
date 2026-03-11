@@ -6,3 +6,4 @@ python-dotenv      # Lire le .env
 psycopg2-binary    # Connexion PostgreSQL
 uvicorn[standard]
 pydantic
+python-multipart
