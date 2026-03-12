@@ -29,6 +29,7 @@ services:
       HF_HUB_DISABLE_TELEMETRY: "1"
     volumes:
       - /data/models:/models
+      -  /data/uploads:/data/uploads
     depends_on:
       - db
   api:
