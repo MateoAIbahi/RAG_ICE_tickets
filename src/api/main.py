@@ -3,7 +3,7 @@ import uuid
 from pathlib import Path
 from typing import List, Optional
 import json
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import psycopg2
@@ -110,7 +110,7 @@ def search(req: SearchRequest):
 @app.post("/upload-pdf")
 async def upload_pdf(
     files: List[UploadFile] = File(...),
-    pccn_version: str = None
+    pccn_version: str = Form(...)
 ):
 
     if not files:
