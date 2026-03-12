@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir \
     --index-url https://download.pytorch.org/whl/cpu
 
 # Dépendances ColQwen
-RUN pip install --no-cache-dir pillow accelerate
+RUN pip install --no-cache-dir pillow accelerate pymupdf
 RUN pip install --no-cache-dir git+https://github.com/huggingface/transformers
 RUN pip install --no-cache-dir git+https://github.com/illuin-tech/colpali@main
 
