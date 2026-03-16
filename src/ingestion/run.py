@@ -49,16 +49,16 @@ def convert_to_pdf(input_file: Path) -> Path:
 def move_metadata_to_pdf_name(source_file: Path, pdf_file: Path):
     """
     Si on convertit mon_doc.docx -> mon_doc.pdf,
-    on renomme/copiede aussi :
+    on déplace aussi :
       mon_doc.docx.meta.json -> mon_doc.pdf.meta.json
-    pour que pdf_ingest.py retrouve bien les metadata.
+    comme ça il ne reste pas de .doc.meta.json orphelin.
     """
     source_meta = source_file.parent / f"{source_file.name}.meta.json"
     pdf_meta = pdf_file.parent / f"{pdf_file.name}.meta.json"
 
     if source_meta.exists():
-        shutil.copy2(source_meta, pdf_meta)
-        print(f"[INGESTION] Metadata copied: {source_meta} -> {pdf_meta}")
+        shutil.move(str(source_meta), str(pdf_meta))
+        print(f"[INGESTION] Metadata moved: {source_meta} -> {pdf_meta}")
     else:
         print(f"[INGESTION] No metadata file found for {source_file}")
 
