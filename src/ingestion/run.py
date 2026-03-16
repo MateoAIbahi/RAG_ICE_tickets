@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -45,6 +46,23 @@ def convert_to_pdf(input_file: Path) -> Path:
     return pdf_path
 
 
+def move_metadata_to_pdf_name(source_file: Path, pdf_file: Path):
+    """
+    Si on convertit mon_doc.docx -> mon_doc.pdf,
+    on renomme/copiede aussi :
+      mon_doc.docx.meta.json -> mon_doc.pdf.meta.json
+    pour que pdf_ingest.py retrouve bien les metadata.
+    """
+    source_meta = source_file.parent / f"{source_file.name}.meta.json"
+    pdf_meta = pdf_file.parent / f"{pdf_file.name}.meta.json"
+
+    if source_meta.exists():
+        shutil.copy2(source_meta, pdf_meta)
+        print(f"[INGESTION] Metadata copied: {source_meta} -> {pdf_meta}")
+    else:
+        print(f"[INGESTION] No metadata file found for {source_file}")
+
+
 def main():
     print("[INGESTION] Starting document ingestion")
 
@@ -52,7 +70,10 @@ def main():
         print("[INGESTION] Upload directory does not exist:", UPLOAD_DIR)
         return
 
-    all_files = [p for p in UPLOAD_DIR.rglob("*") if p.is_file() and not p.name.endswith(".meta.json")]
+    all_files = [
+        p for p in UPLOAD_DIR.rglob("*")
+        if p.is_file() and not p.name.endswith(".meta.json")
+    ]
 
     if not all_files:
         print("[INGESTION] No files found")
@@ -75,7 +96,10 @@ def main():
             elif suffix in SUPPORTED_CONVERTIBLE:
                 pdf_path = convert_to_pdf(file_path)
 
-                # on supprime le fichier bureautique original après conversion réussie
+                # Copie les metadata vers le nom du PDF
+                move_metadata_to_pdf_name(file_path, pdf_path)
+
+                # Supprime le fichier bureautique source après conversion réussie
                 file_path.unlink(missing_ok=True)
                 print(f"[INGESTION] Source file removed after conversion: {file_path}")
 
