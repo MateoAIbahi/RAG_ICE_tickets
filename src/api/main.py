@@ -1,8 +1,9 @@
 import os
 import uuid
+import json
 from pathlib import Path
 from typing import List, Optional
-import json
+
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -13,6 +14,8 @@ app = FastAPI(title="RAG ICE API")
 
 UPLOAD_DIR = Path("/data/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".odt"}
 
 
 app.add_middleware(
@@ -112,7 +115,6 @@ async def upload_pdf(
     files: List[UploadFile] = File(...),
     pccn_version: str = Form(...)
 ):
-
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded")
 
@@ -126,19 +128,19 @@ async def upload_pdf(
     saved_files = []
 
     for file in files:
+        suffix = Path(file.filename).suffix.lower()
 
-        if not file.filename.lower().endswith(".pdf"):
+        if suffix not in ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=400,
-                detail=f"{file.filename} is not a PDF",
+                detail=f"{file.filename} has unsupported extension"
             )
 
-        pdf_path = upload_path / file.filename
+        file_path = upload_path / file.filename
 
-        with pdf_path.open("wb") as buffer:
+        with file_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # metadata file
         meta_path = upload_path / f"{file.filename}.meta.json"
 
         with meta_path.open("w") as f:
@@ -146,7 +148,7 @@ async def upload_pdf(
                 "pccn_version": pccn_version
             }, f)
 
-        saved_files.append(str(pdf_path))
+        saved_files.append(str(file_path))
 
     return {
         "message": "Upload successful",

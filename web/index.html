@@ -44,8 +44,6 @@ select {
 <button onclick="showTab('uploadTab')">Ajouter des documents</button>
 </div>
 
-
-<!-- SEARCH TAB -->
 <div id="searchTab">
 
 <p>Choisis la source :</p>
@@ -76,14 +74,16 @@ select {
 
 </div>
 
-
-
-<!-- UPLOAD TAB -->
 <div id="uploadTab" style="display:none">
 
-<p>Ajouter des PDF :</p>
+<p>Ajouter des documents (.pdf, .doc, .docx, .odt) :</p>
 
-<input type="file" id="pdfFiles" multiple>
+<input
+    type="file"
+    id="docFiles"
+    accept=".pdf,.doc,.docx,.odt"
+    multiple
+>
 
 <p>Version PCCN associée aux documents uploadés :</p>
 
@@ -96,15 +96,13 @@ select {
 
 <br><br>
 
-<button id="btnUpload">Uploader les PDF</button>
+<button id="btnUpload">Uploader les documents</button>
 
 <h3>Statut upload</h3>
 
 <div class="box" id="uploadOut">-</div>
 
 </div>
-
-
 
 <script>
 
@@ -113,7 +111,6 @@ function showTab(tab) {
     document.getElementById("uploadTab").style.display = "none"
     document.getElementById(tab).style.display = "block"
 }
-
 
 // SEARCH
 const searchOut = document.getElementById("searchOut")
@@ -158,16 +155,15 @@ document.getElementById("btnSearch").addEventListener("click", async () => {
     }
 })
 
-
 // UPLOAD
 const uploadOut = document.getElementById("uploadOut")
 
 document.getElementById("btnUpload").addEventListener("click", async () => {
-    const files = document.getElementById("pdfFiles").files
+    const files = document.getElementById("docFiles").files
     const version = document.getElementById("pccn_version_upload").value
 
     if (!files.length) {
-        uploadOut.textContent = "⚠️ Sélectionne au moins un PDF."
+        uploadOut.textContent = "⚠️ Sélectionne au moins un document."
         return
     }
 
