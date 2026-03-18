@@ -10,7 +10,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY certs/firebox.crt /usr/local/share/ca-certificates/firebox.crt
 RUN update-ca-certificates
-
+RUN pip install --upgrade \
+    transformers==4.40.2 \
+    peft==0.10.0 \
+    accelerate
 RUN pip install --no-cache-dir -U pip
 RUN pip install --no-cache-dir psycopg2-binary
 RUN pip install --no-cache-dir \
