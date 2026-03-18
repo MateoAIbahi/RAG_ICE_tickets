@@ -10,18 +10,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY certs/firebox.crt /usr/local/share/ca-certificates/firebox.crt
 RUN update-ca-certificates
-RUN pip install --upgrade \
-    transformers==4.40.2 \
-    peft==0.10.0 \
-    accelerate
-RUN pip install --no-cache-dir -U pip
-RUN pip install --no-cache-dir psycopg2-binary
+
+RUN pip install --no-cache-dir --upgrade pip
+
+RUN pip install --no-cache-dir psycopg2-binary pillow pymupdf
+
 RUN pip install --no-cache-dir \
     torch==2.9.1 \
     torchvision==0.24.1 \
     --index-url https://download.pytorch.org/whl/cpu
-RUN pip install --no-cache-dir pillow accelerate pymupdf
-RUN pip install --no-cache-dir git+https://github.com/huggingface/transformers
+
+RUN pip install --no-cache-dir \
+    transformers==4.40.2 \
+    peft==0.10.0 \
+    accelerate
+
 RUN pip install --no-cache-dir git+https://github.com/illuin-tech/colpali@main
 
 COPY src/ /app/src/
