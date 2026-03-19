@@ -2,6 +2,7 @@ import os
 import psycopg2
 
 from src.ingestion.ticket_ingest import ingest_tickets
+from src.ingestion.run import main as ingest_uploaded_documents
 
 
 def get_rag_conn():
@@ -47,14 +48,25 @@ def update_last_sync(source_name: str):
 
 
 def main():
-    last_sync = get_last_sync("tickets")
-    print(f"[SYNC] Last sync for tickets: {last_sync}")
+    print("[SYNC] Starting weekly sync")
 
-    count = ingest_tickets(last_sync=last_sync)
+    # 1) Tickets
+    last_ticket_sync = get_last_sync("tickets")
+    print(f"[SYNC] Last sync for tickets: {last_ticket_sync}")
 
-    if count >= 0:
-        update_last_sync("tickets")
-        print("[SYNC] Tickets sync updated successfully")
+    ticket_count = ingest_tickets(last_sync=last_ticket_sync)
+
+    update_last_sync("tickets")
+    print(f"[SYNC] Tickets sync done ({ticket_count} ticket(s))")
+
+    # 2) Uploaded documents
+    print("[SYNC] Starting uploaded documents ingestion")
+    ingest_uploaded_documents()
+
+    update_last_sync("uploaded_docs")
+    print("[SYNC] Uploaded documents sync done")
+
+    print("[SYNC] Weekly sync finished successfully")
 
 
 if __name__ == "__main__":
