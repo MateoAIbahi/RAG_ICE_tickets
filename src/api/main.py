@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import psycopg2
 import shutil
+from src.query.search import search_similar_documents
 
 app = FastAPI(title="RAG ICE API")
 
@@ -28,10 +29,10 @@ app.add_middleware(
 
 
 class SearchRequest(BaseModel):
-    question: str
-    sources: List[str] = ["ticket", "pdf"]
-    pccn_version: Optional[str] = None
-    limit: int = 10
+    query: str
+    top_k: int = 5
+    source_type: str | None = None
+    pccn_version: str | None = None
 
 
 def get_conn():
@@ -156,3 +157,13 @@ async def upload_pdf(
         "upload_dir": str(upload_path),
         "files": saved_files
     }
+
+    @app.post("/search")
+    def search(req: SearchRequest):
+        results = search_similar_documents(
+            query=req.query,
+            top_k=req.top_k,
+            source_type=req.source_type,
+            pccn_version=req.pccn_version,
+        )
+        return {"results": results}
