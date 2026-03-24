@@ -160,8 +160,10 @@ async def upload_pdf(
 
     @app.post("/search")
     def search(req: SearchRequest):
+        query = req.query.strip()
+
         results = search_similar_documents(
-            query=req.query,
+            query=query,
             top_k=req.top_k,
             source_type=req.source_type,
             pccn_version=req.pccn_version,
