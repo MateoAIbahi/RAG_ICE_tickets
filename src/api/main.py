@@ -11,6 +11,7 @@ import psycopg2
 import shutil
 
 from src.query.search import search_similar_documents
+from src.llm.devstral_client import ask_devstral
 
 app = FastAPI(title="RAG ICE API")
 
@@ -34,6 +35,11 @@ class SearchRequest(BaseModel):
     source_type: str | None = None
     pccn_version: str | None = None
 
+class AskRequest(BaseModel):
+    query: str
+    top_k: int = 5
+    source_type: str | None = None
+    pccn_version: str | None = None
 
 def get_conn():
     db_url = os.getenv("RAG_DATABASE_URL", "postgresql://rag:ragpass@db:5432/ragdb")
@@ -60,7 +66,48 @@ def search(req: SearchRequest):
     )
     return {"results": results}
 
+@app.post("/ask")
+def ask(req: AskRequest):
+    query = req.query.strip()
 
+    if not query:
+        raise HTTPException(status_code=400, detail="Query vide")
+
+    results = search_similar_documents(
+        query=query,
+        top_k=req.top_k,
+        source_type=req.source_type,
+        pccn_version=req.pccn_version,
+    )
+
+    # 🔥 Construction du contexte
+    context_parts = []
+    for i, r in enumerate(results, start=1):
+        source_label = f"{r['source_type']} | {r['source_path']}"
+        if r.get("page_num") is not None:
+            source_label += f" | page {r['page_num']}"
+
+        context_parts.append(
+            f"[Source {i}] {source_label}\n{r['content']}"
+        )
+
+    context = "\n\n".join(context_parts)
+
+    # 🔥 Appel LLM
+    answer = ask_devstral(question=query, context=context)
+
+    return {
+        "answer": answer,
+        "sources": [
+            {
+                "source_type": r["source_type"],
+                "source_path": r["source_path"],
+                "page_num": r["page_num"],
+            }
+            for r in results
+        ],
+    }
+    
 @app.post("/upload-pdf")
 async def upload_pdf(
     files: List[UploadFile] = File(...),

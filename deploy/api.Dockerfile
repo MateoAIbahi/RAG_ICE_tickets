@@ -34,6 +34,8 @@ RUN pip install --no-cache-dir \
 
 RUN pip install --no-cache-dir git+https://github.com/illuin-tech/colpali@main
 
+RUN pip install --no-cache-dir requests
+
 COPY src/ /app/src/
 ENV PYTHONPATH=/app
 
