@@ -3,6 +3,7 @@ import uuid
 import json
 from pathlib import Path
 from typing import List
+import time
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -68,11 +69,10 @@ def search(req: SearchRequest):
 
 @app.post("/ask")
 def ask(req: AskRequest):
-    print(f"[ASK] top_k reçu = {req.top_k}")
-    query = req.query.strip()
+    t0 = time.time()
 
-    if not query:
-        raise HTTPException(status_code=400, detail="Query vide")
+    query = req.query.strip()
+    print(f"[ASK] query reçue, top_k={req.top_k}")
 
     results = search_similar_documents(
         query=query,
@@ -80,22 +80,25 @@ def ask(req: AskRequest):
         source_type=req.source_type,
         pccn_version=req.pccn_version,
     )
+    print(f"[ASK] retrieval terminé en {time.time() - t0:.2f}s, nb résultats={len(results)}")
 
-    # 🔥 Construction du contexte
     context_parts = []
     for i, r in enumerate(results, start=1):
         source_label = f"{r['source_type']} | {r['source_path']}"
         if r.get("page_num") is not None:
             source_label += f" | page {r['page_num']}"
-
-        context_parts.append(
-            f"[Source {i}] {source_label}\nContenu:\n{r['content']}"
-        )
+        context_parts.append(f"[Source {i}] {source_label}\nContenu:\n{r['content']}")
 
     context = "\n\n".join(context_parts)
 
-    # 🔥 Appel LLM
+    print(f"[ASK] contexte construit, taille caractères={len(context)}")
+    print(f"[ASK] aperçu contexte: {context[:500]}")
+
+    t1 = time.time()
+    print("[ASK] appel devstral...")
     answer = ask_devstral(question=query, context=context)
+    print(f"[ASK] devstral terminé en {time.time() - t1:.2f}s")
+    print(f"[ASK] total /ask = {time.time() - t0:.2f}s")
 
     return {
         "answer": answer,
