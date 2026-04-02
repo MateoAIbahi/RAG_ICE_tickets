@@ -147,7 +147,6 @@ document.getElementById("btnSearch").addEventListener("click", async () => {
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({
                 query: q,
-                top_k: 5,
                 source_type: sourceType,
                 pccn_version: version || null
             })

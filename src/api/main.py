@@ -31,13 +31,13 @@ app.add_middleware(
 
 class SearchRequest(BaseModel):
     query: str
-    top_k: int = 5
+    top_k: int = 8
     source_type: str | None = None
     pccn_version: str | None = None
 
 class AskRequest(BaseModel):
     query: str
-    top_k: int = 5
+    top_k: int = 8
     source_type: str | None = None
     pccn_version: str | None = None
 
