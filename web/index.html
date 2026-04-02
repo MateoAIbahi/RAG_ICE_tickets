@@ -124,6 +124,11 @@ document.getElementById("btnSearch").addEventListener("click", async () => {
 
     const version = document.getElementById("pccn_version_search").value
 
+    let sourceType = "all"
+    if (sources.length === 1) {
+        sourceType = sources[0]
+    }
+
     if (!q) {
         searchOut.textContent = "⚠️ Mets une question."
         return
@@ -137,17 +142,19 @@ document.getElementById("btnSearch").addEventListener("click", async () => {
     searchOut.textContent = "⏳ Recherche..."
 
     try {
-        const resp = await fetch("/api/search", {
+        const resp = await fetch("/api/ask", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({
-                question: q,
-                sources: sources,
+                query: q,
+                top_k: 5,
+                source_type: sourceType,
                 pccn_version: version || null
             })
         })
 
         const data = await resp.json()
+
         searchOut.textContent = JSON.stringify(data, null, 2)
 
     } catch (e) {
