@@ -155,7 +155,24 @@ document.getElementById("btnSearch").addEventListener("click", async () => {
 
         const data = await resp.json()
 
-        searchOut.textContent = JSON.stringify(data, null, 2)
+        if (data.answer) {
+            let html = `<strong>Réponse :</strong><br><br>${data.answer}`
+
+            if (data.sources && data.sources.length > 0) {
+                html += `<br><br><strong>Sources :</strong><ul>`
+                for (const src of data.sources) {
+                    const page = src.page_num !== null && src.page_num !== undefined
+                        ? ` - page ${src.page_num}`
+                        : ""
+                    html += `<li>${src.source_path}${page}</li>`
+                }
+                html += `</ul>`
+            }
+
+            searchOut.innerHTML = html
+        } else {
+            searchOut.textContent = "Aucune réponse générée."
+        }
 
     } catch (e) {
         searchOut.textContent = "❌ Erreur: " + e
