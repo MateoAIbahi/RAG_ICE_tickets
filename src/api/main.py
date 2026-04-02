@@ -88,7 +88,7 @@ def ask(req: AskRequest):
             source_label += f" | page {r['page_num']}"
 
         context_parts.append(
-            f"[Source {i}] {source_label}\n{r['content']}"
+            f"[Source {i}] {source_label}\nContenu:\n{r['content']}"
         )
 
     context = "\n\n".join(context_parts)

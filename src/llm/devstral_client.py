@@ -14,15 +14,22 @@ def ask_devstral(question: str, context: str) -> str:
             {
                 "role": "system",
                 "content": (
-                    "Tu es un assistant technique ICE. "
-                    "Tu réponds uniquement à partir du contexte fourni. "
-                    "Si l'information n'est pas dans le contexte, dis-le clairement. "
-                    "Réponds de manière structurée et précise."
+                    "Tu es un assistant technique ICE.\n"
+                    "Tu dois répondre UNIQUEMENT à partir du contexte fourni.\n"
+                    "Ne fais aucune supposition.\n"
+                    "Si la réponse n'est pas clairement présente dans le contexte, dis : 'Information non trouvée dans les documents fournis'.\n"
+                    "Cite les sources utilisées (nom du document et page).\n"
+                    "Réponds de manière précise et technique."
                 ),
             },
             {
                 "role": "user",
-                "content": f"Question:\n{question}\n\nContexte:\n{context}",
+                "content": (
+                    f"Question:\n{question}\n\n"
+                    f"Contexte:\n{context}\n\n"
+                    "Réponds uniquement à partir du contexte.\n"
+                    "Cite les sources sous la forme : (document, page).\n"
+                ),
             },
         ],
         "temperature": 0.2,
