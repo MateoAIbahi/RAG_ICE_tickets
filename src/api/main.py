@@ -68,6 +68,7 @@ def search(req: SearchRequest):
 
 @app.post("/ask")
 def ask(req: AskRequest):
+    print(f"[ASK] top_k reçu = {req.top_k}")
     query = req.query.strip()
 
     if not query:
