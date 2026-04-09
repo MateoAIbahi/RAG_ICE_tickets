@@ -24,7 +24,7 @@ RUN pip install --no-cache-dir \
     peft==0.10.0 \
     accelerate
 
-#RUN pip install --no-cache-dir \
+RUN pip install --no-cache-dir \
     fastapi \
     uvicorn \
     psycopg2-binary \
