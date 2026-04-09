@@ -14,8 +14,6 @@ ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 ENV CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
-RUN pip install --no-cache-dir --upgrade pip
-
 RUN pip install --no-cache-dir \
     torch==2.9.1 \
     torchvision==0.24.1 \
