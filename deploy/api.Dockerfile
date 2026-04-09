@@ -14,25 +14,25 @@ ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 ENV CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
-RUN pip install --no-cache-dir \
-    torch==2.9.1 \
-    torchvision==0.24.1 \
-    --index-url https://download.pytorch.org/whl/cpu
+#RUN pip install --no-cache-dir \
+ #   torch==2.9.1 \
+  #  torchvision==0.24.1 \
+   # --index-url https://download.pytorch.org/whl/cpu
 
-RUN pip install --no-cache-dir \
-    transformers==4.40.2 \
-    peft==0.10.0 \
-    accelerate
+#RUN pip install --no-cache-dir \
+ #   transformers==4.40.2 \
+  #  peft==0.10.0 \
+   # accelerate
 
-RUN pip install --no-cache-dir \
-    fastapi \
-    uvicorn \
-    psycopg2-binary \
-    python-multipart
+#RUN pip install --no-cache-dir \
+ #   fastapi \
+  #  uvicorn \
+   # psycopg2-binary \
+    #python-multipart
 
-RUN pip install --no-cache-dir git+https://github.com/illuin-tech/colpali@main
+#RUN pip install --no-cache-dir git+https://github.com/illuin-tech/colpali@main
 
-RUN pip install --no-cache-dir requests
+#RUN pip install --no-cache-dir requests
 
 COPY src/ /app/src/
 ENV PYTHONPATH=/app
