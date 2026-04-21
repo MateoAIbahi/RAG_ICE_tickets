@@ -8,10 +8,11 @@ try:
 
     moe_map = getattr(hf_peft_integration, "_MOE_TARGET_MODULE_MAPPING", None)
     if isinstance(moe_map, dict) and "qwen2_vl" not in moe_map:
-        if "qwen2_5_vl" in moe_map:
-            moe_map["qwen2_vl"] = moe_map["qwen2_5_vl"]
+        base = moe_map.get("qwen2_5_vl")
+        if isinstance(base, dict):
+            moe_map["qwen2_vl"] = base
         else:
-            moe_map["qwen2_vl"] = []
+            moe_map["qwen2_vl"] = {}
 except Exception:
     pass
 
