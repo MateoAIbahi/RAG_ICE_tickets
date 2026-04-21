@@ -19,10 +19,14 @@ RUN pip install --no-cache-dir \
     torchvision==0.24.1 \
     --index-url https://download.pytorch.org/whl/cpu
 
+RUN pip install --no-cache-dir git+https://github.com/illuin-tech/colpali@main --no-deps
+
 RUN pip install --no-cache-dir \
     transformers==4.40.2 \
     peft==0.10.0 \
-    accelerate
+    accelerate \
+    pillow \
+    pymupdf
 
 RUN pip install --no-cache-dir \
     fastapi \
@@ -30,7 +34,6 @@ RUN pip install --no-cache-dir \
     psycopg2-binary \
     python-multipart
 
-RUN pip install --no-cache-dir git+https://github.com/illuin-tech/colpali@main
 
 RUN pip install --no-cache-dir requests
 
