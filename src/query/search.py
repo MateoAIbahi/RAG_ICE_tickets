@@ -2,7 +2,25 @@ import os
 import psycopg2
 import torch
 
+# Patch compat PEFT / Transformers pour qwen2_vl
+try:
+    from transformers.integrations import peft as hf_peft_integration
+
+    moe_map = getattr(hf_peft_integration, "_MOE_TARGET_MODULE_MAPPING", None)
+    if isinstance(moe_map, dict) and "qwen2_vl" not in moe_map:
+        if "qwen2_5_vl" in moe_map:
+            moe_map["qwen2_vl"] = moe_map["qwen2_5_vl"]
+        else:
+            moe_map["qwen2_vl"] = []
+except Exception:
+    pass
+
 from colpali_engine.models import ColQwen2_5, ColQwen2_5_Processor
+
+
+MODEL = None
+PROCESSOR = None
+DEVICE = None
 
 
 def get_rag_conn():
@@ -27,6 +45,15 @@ def load_model():
 
     processor = ColQwen2_5_Processor.from_pretrained(model_name)
     return model, processor, device
+
+
+def get_model():
+    global MODEL, PROCESSOR, DEVICE
+
+    if MODEL is None or PROCESSOR is None or DEVICE is None:
+        MODEL, PROCESSOR, DEVICE = load_model()
+
+    return MODEL, PROCESSOR, DEVICE
 
 
 def pool_embedding(embeddings: torch.Tensor):
@@ -55,7 +82,7 @@ def search_similar_documents(
     source_type: str | None = None,
     pccn_version: str | None = None,
 ):
-    model, processor, device = load_model()
+    model, processor, device = get_model()
     query_embedding = embed_query(query, model, processor, device)
 
     conn = get_rag_conn()
