@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir \
 
 RUN pip install --no-cache-dir fastapi uvicorn python-multipart pillow pymupdf
 
-RUN pip install --no-cache-dir git+https://github.com/illuin-tech/colpali@main
+RUN pip install --no-cache-dir colpali-engine==0.3.14
 
 COPY src/ /app/src/
 ENV PYTHONPATH=/app

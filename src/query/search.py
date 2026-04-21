@@ -2,20 +2,6 @@ import os
 import psycopg2
 import torch
 
-# Patch compat PEFT / Transformers pour qwen2_vl
-try:
-    from transformers.integrations import peft as hf_peft_integration
-
-    moe_map = getattr(hf_peft_integration, "_MOE_TARGET_MODULE_MAPPING", None)
-    if isinstance(moe_map, dict) and "qwen2_vl" not in moe_map:
-        base = moe_map.get("qwen2_5_vl")
-        if isinstance(base, dict):
-            moe_map["qwen2_vl"] = base
-        else:
-            moe_map["qwen2_vl"] = {}
-except Exception:
-    pass
-
 from colpali_engine.models import ColQwen2_5, ColQwen2_5_Processor
 
 
