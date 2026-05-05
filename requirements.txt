@@ -1,9 +1,10 @@
-fastapi              # API web
-pandas              # Lecture Excel
-openpyxl            # Backend Excel
-requests            # Appels HTTP (Microsoft Graph)
-python-dotenv      # Lire le .env
-psycopg2-binary    # Connexion PostgreSQL
+fastapi
+pandas
+openpyxl
+requests
+python-dotenv
+psycopg2-binary
 uvicorn[standard]
 pydantic
 python-multipart
+colpali-engine
