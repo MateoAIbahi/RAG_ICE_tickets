@@ -43,6 +43,7 @@ services:
       - /data/uploads:/data/uploads
     depends_on:
       - db
+    restart: unless-stopped
   web:
     build:
       context: .
@@ -52,5 +53,6 @@ services:
       - "8080:80"
     depends_on:
       - api
+    restart: unless-stopped
 volumes:
   pgdata:
