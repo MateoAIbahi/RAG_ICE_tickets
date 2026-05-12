@@ -39,11 +39,14 @@ services:
     container_name: rag_api
     ports:
       - "8000:8000"
-    volumes:
-      - /data/uploads:/data/uploads
     depends_on:
       - db
     restart: unless-stopped
+    environment:
+      HF_HOME: /models/hf
+    volumes:
+      - /data/uploads:/data/uploads
+      - /data/models:/models
   web:
     build:
       context: .
