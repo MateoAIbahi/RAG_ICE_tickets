@@ -15,7 +15,7 @@ ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 ENV CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
-RUN pip install --no-cache-dir psycopg2-binary requests pillow pymupdf
+RUN pip install --no-cache-dir psycopg2-binary requests pillow pymupdf pymysql
 
 RUN pip install --no-cache-dir \
     torch==2.6.0 \

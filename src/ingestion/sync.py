@@ -3,6 +3,7 @@ import psycopg2
 
 from src.ingestion.ticket_ingest import ingest_tickets
 from src.ingestion.run import main as ingest_uploaded_documents
+from src.ingestion.mantis_ingest import ingest_mantis
 
 
 def get_rag_conn():
@@ -50,7 +51,7 @@ def update_last_sync(source_name: str):
 def main():
     print("[SYNC] Starting weekly sync")
 
-    # 1) Tickets
+    # 1) Tickets Sylob
     last_ticket_sync = get_last_sync("tickets")
     print(f"[SYNC] Last sync for tickets: {last_ticket_sync}")
 
@@ -59,7 +60,16 @@ def main():
     update_last_sync("tickets")
     print(f"[SYNC] Tickets sync done ({ticket_count} ticket(s))")
 
-    # 2) Uploaded documents
+    # 2) Tickets Mantis
+    last_mantis_sync = get_last_sync("mantis")
+    print(f"[SYNC] Last sync for mantis: {last_mantis_sync}")
+
+    mantis_count = ingest_mantis(last_sync=last_mantis_sync)
+
+    update_last_sync("mantis")
+    print(f"[SYNC] Mantis sync done ({mantis_count} ticket(s))")
+
+    # 3) Uploaded documents
     print("[SYNC] Starting uploaded documents ingestion")
     ingest_uploaded_documents()
 
