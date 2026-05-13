@@ -27,6 +27,11 @@ services:
       REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
       CURL_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
       HF_HUB_DISABLE_TELEMETRY: "1"
+      MANTIS_DB_HOST: mantis-testlink.ice.local
+      MANTIS_DB_PORT: "3306"
+      MANTIS_DB_NAME: m-pccn
+      MANTIS_DB_USER: rag-tickets
+      MANTIS_DB_PASSWORD: ${MANTIS_DB_PASSWORD}
     volumes:
       - /data/models:/models
       -  /data/uploads:/data/uploads
