@@ -41,7 +41,7 @@ select {
 
 <div class="tabs">
 <button onclick="showTab('searchTab')">Recherche</button>
-<button onclick="showTab('uploadTab')">Ajouter des documents</button>
+<button onclick="askUploadPassword()">Ajouter des documents</button>
 </div>
 
 <div id="searchTab">
@@ -112,6 +112,15 @@ function showTab(tab) {
     document.getElementById(tab).style.display = "block"
 }
 
+function askUploadPassword() {
+    const password = prompt("Mot de passe requis pour ajouter des documents :")
+
+    if (password === "icetickets") {
+        showTab("uploadTab")
+    } else if (password !== null) {
+        alert("Mot de passe incorrect.")
+    }
+}
 // SEARCH
 const searchOut = document.getElementById("searchOut")
 
