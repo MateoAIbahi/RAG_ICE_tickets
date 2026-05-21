@@ -185,7 +185,8 @@ def ingest_pdf_file(pdf_path: str):
     page_count = 0
 
     try:
-        for page_num, image, extracted_text, image_b64 in pages:
+        for page_num, image, extracted_text, image_b64 in iter_pdf_pages(pdf_path):
+            page_count += 1
             chunk_id = f"{source_id}#p{page_num}"
 
             pooled_embedding = embed_image(image, model, processor, device)
@@ -205,7 +206,9 @@ def ingest_pdf_file(pdf_path: str):
             )
 
             print(f"[PDF] Insert OK: {chunk_id}")
-
+        if page_count == 0:
+            print(f"[PDF] Aucun contenu trouvé dans {pdf_path}")
+            return
         pdf_path.unlink(missing_ok=True)
         print(f"[PDF] PDF supprimé après ingestion: {pdf_path}")
 
