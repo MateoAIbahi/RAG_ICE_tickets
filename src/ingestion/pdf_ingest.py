@@ -11,6 +11,10 @@ from PIL import Image
 
 from colpali_engine.models import ColQwen2_5, ColQwen2_5_Processor
 
+def clean_text_for_postgres(text: str) -> str:
+    if text is None:
+        return ""
+    return text.replace("\x00", "")
 
 def get_rag_conn():
     db_url = os.getenv("RAG_DATABASE_URL", "postgresql://rag:ragpass@db:5432/ragdb")
@@ -191,7 +195,7 @@ def ingest_pdf_file(pdf_path: str):
 
             pooled_embedding = embed_image(image, model, processor, device)
 
-            content = extracted_text if extracted_text else f"[PAGE_IMAGE_ONLY] {source_id} page {page_num}"
+            content = clean_text_for_postgres(extracted_text) if extracted_text else f"[PAGE_IMAGE_ONLY] {source_id} page {page_num}"
 
             insert_document(
                 conn=conn,
