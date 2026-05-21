@@ -58,32 +58,32 @@ def pil_image_to_base64(image: Image.Image) -> str:
     return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
-def render_pdf_pages(pdf_path: Path, zoom: float = 1.5):
+def iter_pdf_pages(pdf_path: Path, zoom: float = 1.5):
     """
-    Retourne une liste de tuples :
+    Génère les pages une par une pour éviter de charger tout le PDF en RAM.
+    Retourne à chaque itération :
     (page_num, image_pil, extracted_text, page_image_base64)
     """
     doc = fitz.open(pdf_path)
-    pages = []
 
-    for i, page in enumerate(doc):
-        matrix = fitz.Matrix(zoom, zoom)
-        pix = page.get_pixmap(matrix=matrix, alpha=False)
+    try:
+        for i, page in enumerate(doc):
+            matrix = fitz.Matrix(zoom, zoom)
+            pix = page.get_pixmap(matrix=matrix, alpha=False)
 
-        img = Image.frombytes(
-            "RGB",
-            [pix.width, pix.height],
-            pix.samples
-        )
+            img = Image.frombytes(
+                "RGB",
+                [pix.width, pix.height],
+                pix.samples
+            )
 
-        text = page.get_text("text").strip()
-        image_b64 = pil_image_to_base64(img)
+            text = page.get_text("text").strip()
+            image_b64 = pil_image_to_base64(img)
 
-        pages.append((i + 1, img, text, image_b64))
+            yield i + 1, img, text, image_b64
 
-    doc.close()
-    return pages
-
+    finally:
+        doc.close()
 
 def pool_embedding(embeddings: torch.Tensor):
     """
@@ -180,14 +180,9 @@ def ingest_pdf_file(pdf_path: str):
     source_path = pdf_path.name
     pccn_version = read_pdf_metadata(pdf_path)
 
-    pages = render_pdf_pages(pdf_path)
-
-    if not pages:
-        print(f"[PDF] Aucun contenu trouvé dans {pdf_path}")
-        return
-
     model, processor, device = load_model()
     conn = get_rag_conn()
+    page_count = 0
 
     try:
         for page_num, image, extracted_text, image_b64 in pages:
