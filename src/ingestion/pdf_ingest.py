@@ -38,22 +38,26 @@ def read_pdf_metadata(pdf_path: Path):
         print(f"[PDF] Error reading metadata {meta_file}: {e}")
         return None
 
+MODEL = None
+PROCESSOR = None
+DEVICE = None
+def get_model():
+    global MODEL, PROCESSOR, DEVICE
 
-def load_model():
-    model_name = os.getenv("EMBED_MODEL", "Metric-AI/ColQwen2.5-3b-multilingual-v1.0")
-    device = os.getenv("DEVICE", "cpu")
+    if MODEL is None:
+        print(f"[PDF] Loading model: {EMBED_MODEL}")
+        print(f"[PDF] Device: {DEVICE_NAME}")
 
-    print(f"[PDF] Loading model: {model_name}")
-    print(f"[PDF] Device: {device}")
+        MODEL = ColQwen2_5.from_pretrained(
+            EMBED_MODEL,
+            torch_dtype=torch.float32,
+            device_map=DEVICE_NAME,
+        ).eval()
 
-    model = ColQwen2_5.from_pretrained(
-        model_name,
-        torch_dtype=torch.float32,
-        device_map=device,
-    ).eval()
+        PROCESSOR = ColQwen2_5_Processor.from_pretrained(EMBED_MODEL)
+        DEVICE = DEVICE_NAME
 
-    processor = ColQwen2_5_Processor.from_pretrained(model_name)
-    return model, processor, device
+    return MODEL, PROCESSOR, DEVICE
 
 
 def pil_image_to_base64(image: Image.Image) -> str:
@@ -184,7 +188,7 @@ def ingest_pdf_file(pdf_path: str):
     source_path = pdf_path.name
     pccn_version = read_pdf_metadata(pdf_path)
 
-    model, processor, device = load_model()
+    model, processor, device = get_model()
     conn = get_rag_conn()
     page_count = 0
 
