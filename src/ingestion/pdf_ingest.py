@@ -66,7 +66,7 @@ def pil_image_to_base64(image: Image.Image) -> str:
     return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
-def iter_pdf_pages(pdf_path: Path, zoom: float = 1.5):
+def iter_pdf_pages(pdf_path: Path, zoom: float = 0.8):
     """
     Génère les pages une par une pour éviter de charger tout le PDF en RAM.
     Retourne à chaque itération :
