@@ -41,21 +41,25 @@ def read_pdf_metadata(pdf_path: Path):
 MODEL = None
 PROCESSOR = None
 DEVICE = None
+
 def get_model():
     global MODEL, PROCESSOR, DEVICE
 
-    if MODEL is None:
-        print(f"[PDF] Loading model: {EMBED_MODEL}")
-        print(f"[PDF] Device: {DEVICE_NAME}")
+    if MODEL is None or PROCESSOR is None or DEVICE is None:
+        model_name = os.getenv("EMBED_MODEL", "Metric-AI/ColQwen2.5-3b-multilingual-v1.0")
+        device = os.getenv("DEVICE", "cpu")
+
+        print(f"[PDF] Loading model: {model_name}")
+        print(f"[PDF] Device: {device}")
 
         MODEL = ColQwen2_5.from_pretrained(
-            EMBED_MODEL,
+            model_name,
             torch_dtype=torch.float32,
-            device_map=DEVICE_NAME,
+            device_map=device,
         ).eval()
 
-        PROCESSOR = ColQwen2_5_Processor.from_pretrained(EMBED_MODEL)
-        DEVICE = DEVICE_NAME
+        PROCESSOR = ColQwen2_5_Processor.from_pretrained(model_name)
+        DEVICE = device
 
     return MODEL, PROCESSOR, DEVICE
 
