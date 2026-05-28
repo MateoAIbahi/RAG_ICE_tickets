@@ -269,7 +269,7 @@ def ingest_mantis(last_sync=None):
             if not content.strip():
                 print(f"[MANTIS] Skip empty ticket {ticket.get('id')}")
                 continue
-
+            print(f"[MANTIS] Embedding MANTIS-{ticket.get('id')} content length={len(content)} chars")
             embedding = embed_text(content, model, processor, device)
 
             insert_mantis_ticket(
