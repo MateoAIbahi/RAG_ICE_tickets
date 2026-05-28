@@ -101,7 +101,7 @@ def embed_text(text: str, model, processor, device: str):
     return pool_embedding(embeddings)
 
 
-def fetch_mantis_tickets(last_sync=None):
+def fetch_mantis_tickets(last_sync=None, exclude_ids=None, limit=100):
     sql = """
         SELECT
             b.id,
@@ -125,13 +125,20 @@ def fetch_mantis_tickets(last_sync=None):
         LEFT JOIN mantis_bugnote_text_table nt ON nt.id = n.bugnote_text_id
     """
 
+    conditions = []
     params = []
 
     if last_sync is not None:
-        sql += """
-        WHERE FROM_UNIXTIME(b.last_updated) > %s
-        """
+        conditions.append("FROM_UNIXTIME(b.last_updated) > %s")
         params.append(last_sync)
+
+    if exclude_ids:
+        placeholders = ",".join(["%s"] * len(exclude_ids))
+        conditions.append(f"b.id NOT IN ({placeholders})")
+        params.extend(list(exclude_ids))
+
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
 
     sql += """
         GROUP BY
@@ -143,7 +150,9 @@ def fetch_mantis_tickets(last_sync=None):
             bt.steps_to_reproduce,
             bt.additional_information
         ORDER BY b.last_updated ASC
+        LIMIT %s
     """
+    params.append(limit)
 
     conn = get_mantis_conn()
     try:
@@ -231,15 +240,18 @@ def ingest_mantis(last_sync=None):
     else:
         print(f"[MANTIS] Incremental sync since {last_sync}")
 
-    tickets = fetch_mantis_tickets(last_sync=last_sync)
-    print(f"[MANTIS] {len(tickets)} ticket(s) fetched")
-    existing_ids = get_existing_mantis_ids()
-    print(f"[MANTIS] {len(existing_ids)} ticket(s) already indexed")
-    tickets = [t for t in tickets if int(t["id"]) not in existing_ids]
-    print(f"[MANTIS] {len(tickets)} ticket(s) remaining after excluding already indexed tickets")
     BATCH_SIZE = int(os.getenv("MANTIS_BATCH_SIZE", "100"))
 
-    tickets = tickets[:BATCH_SIZE]
+    existing_ids = get_existing_mantis_ids()
+    print(f"[MANTIS] {len(existing_ids)} ticket(s) already indexed")
+
+    tickets = fetch_mantis_tickets(
+        last_sync=last_sync,
+        exclude_ids=existing_ids,
+        limit=BATCH_SIZE,
+    )
+
+    print(f"[MANTIS] {len(tickets)} ticket(s) fetched after excluding already indexed tickets")
     print(f"[MANTIS] Batch limited to {len(tickets)} ticket(s)")
     if not tickets:
         print("[MANTIS] No tickets to ingest")
