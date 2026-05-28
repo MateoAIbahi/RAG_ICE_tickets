@@ -237,6 +237,10 @@ def ingest_mantis(last_sync=None):
     print(f"[MANTIS] {len(existing_ids)} ticket(s) already indexed")
     tickets = [t for t in tickets if int(t["id"]) not in existing_ids]
     print(f"[MANTIS] {len(tickets)} ticket(s) remaining after excluding already indexed tickets")
+    BATCH_SIZE = int(os.getenv("MANTIS_BATCH_SIZE", "100"))
+
+    tickets = tickets[:BATCH_SIZE]
+    print(f"[MANTIS] Batch limited to {len(tickets)} ticket(s)")
     if not tickets:
         print("[MANTIS] No tickets to ingest")
         return 0
