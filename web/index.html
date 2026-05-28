@@ -50,6 +50,7 @@ select {
 
 <label><input type="checkbox" id="src_ticket" checked> Tickets</label>
 <label><input type="checkbox" id="src_pdf" checked> PDF</label>
+<label><input type="checkbox" id="src_mantis" checked> Mantis</label>
 
 <p>Version PCCN :</p>
 
@@ -130,7 +131,7 @@ document.getElementById("btnSearch").addEventListener("click", async () => {
 
     if (document.getElementById("src_ticket").checked) sources.push("ticket")
     if (document.getElementById("src_pdf").checked) sources.push("pdf")
-
+    if (document.getElementById("src_mantis").checked) sources.push("mantis")
     const version = document.getElementById("pccn_version_search").value
 
     let sourceType = "all"
