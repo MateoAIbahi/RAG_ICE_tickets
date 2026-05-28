@@ -257,14 +257,22 @@ def ingest_mantis(last_sync=None):
         print("[MANTIS] No tickets to ingest")
         return 0
 
+    print("[MANTIS] Before load_model")
     model, processor, device = load_model()
+    print("[MANTIS] After load_model")
+
+    print("[MANTIS] Before get_rag_conn")
     rag_conn = get_rag_conn()
+    print("[MANTIS] After get_rag_conn")
 
     count = 0
+    print("[MANTIS] Before loop")
 
     try:
         for ticket in tickets:
+            print(f"[MANTIS] Start ticket MANTIS-{ticket.get('id')}")
             content = build_mantis_content(ticket)
+            print(f"[MANTIS] Content length={len(content)}")
 
             if not content.strip():
                 print(f"[MANTIS] Skip empty ticket {ticket.get('id')}")
