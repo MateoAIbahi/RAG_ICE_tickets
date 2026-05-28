@@ -15,6 +15,32 @@ def get_rag_conn():
     conn.autocommit = True
     return conn
 
+def get_existing_mantis_ids():
+    conn = get_rag_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT source_id
+                FROM documents
+                WHERE source_type = 'mantis'
+                """
+            )
+            rows = cur.fetchall()
+
+        existing_ids = set()
+
+        for row in rows:
+            source_id = row[0]
+            if source_id and source_id.startswith("MANTIS-"):
+                try:
+                    existing_ids.add(int(source_id.replace("MANTIS-", "")))
+                except ValueError:
+                    pass
+
+        return existing_ids
+    finally:
+        conn.close()
 
 def get_mantis_conn():
     host = os.getenv("MANTIS_DB_HOST", "mantis-testlink.ice.local")
@@ -207,7 +233,10 @@ def ingest_mantis(last_sync=None):
 
     tickets = fetch_mantis_tickets(last_sync=last_sync)
     print(f"[MANTIS] {len(tickets)} ticket(s) fetched")
-
+    existing_ids = get_existing_mantis_ids()
+    print(f"[MANTIS] {len(existing_ids)} ticket(s) already indexed")
+    tickets = [t for t in tickets if int(t["id"]) not in existing_ids]
+    print(f"[MANTIS] {len(tickets)} ticket(s) remaining after excluding already indexed tickets")
     if not tickets:
         print("[MANTIS] No tickets to ingest")
         return 0
