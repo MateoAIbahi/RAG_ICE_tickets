@@ -294,3 +294,7 @@ def ingest_mantis(last_sync=None):
 
     finally:
         rag_conn.close()
+
+if __name__ == "__main__":
+    count = ingest_mantis(last_sync=None)
+    print(f"[MANTIS] Manual ingestion done ({count} ticket(s))")
