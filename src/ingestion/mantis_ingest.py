@@ -64,21 +64,30 @@ def get_mantis_conn():
     )
 
 
-def load_model():
-    model_name = os.getenv("EMBED_MODEL", "Metric-AI/ColQwen2.5-3b-multilingual-v1.0")
-    device = os.getenv("DEVICE", "cpu")
+MODEL = None
+PROCESSOR = None
+DEVICE = None
 
-    print(f"[MANTIS] Loading model: {model_name}")
-    print(f"[MANTIS] Device: {device}")
+def get_model():
+    global MODEL, PROCESSOR, DEVICE
 
-    model = ColQwen2_5.from_pretrained(
-        model_name,
-        torch_dtype=torch.float32,
-        device_map=device,
-    ).eval()
+    if MODEL is None or PROCESSOR is None or DEVICE is None:
+        model_name = os.getenv("EMBED_MODEL", "Metric-AI/ColQwen2.5-3b-multilingual-v1.0")
+        device = os.getenv("DEVICE", "cpu")
 
-    processor = ColQwen2_5_Processor.from_pretrained(model_name)
-    return model, processor, device
+        print(f"[MANTIS] Loading model: {model_name}")
+        print(f"[MANTIS] Device: {device}")
+
+        MODEL = ColQwen2_5.from_pretrained(
+            model_name,
+            torch_dtype=torch.float32,
+            device_map=device,
+        ).eval()
+
+        PROCESSOR = ColQwen2_5_Processor.from_pretrained(model_name)
+        DEVICE = device
+
+    return MODEL, PROCESSOR, DEVICE
 
 
 def pool_embedding(embeddings: torch.Tensor):
@@ -258,7 +267,7 @@ def ingest_mantis(last_sync=None):
         return 0
 
     print("[MANTIS] Before load_model")
-    model, processor, device = load_model()
+    model, processor, device = get_model()
     print("[MANTIS] After load_model")
 
     print("[MANTIS] Before get_rag_conn")
