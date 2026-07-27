@@ -94,8 +94,8 @@ def search_similar_documents(
             sql += " AND source_type = %s"
             params.append(source_type)
 
-        if pccn_version:
-            sql += " AND pccn_version = %s"
+        if pccn_version and pccn_version != "all":
+            sql += " AND (pccn_version = %s OR pccn_version IS NULL)"
             params.append(pccn_version)
 
         sql += """
