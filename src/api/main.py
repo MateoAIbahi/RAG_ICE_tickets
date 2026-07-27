@@ -69,10 +69,10 @@ def search(req: SearchRequest):
 
 @app.post("/ask")
 def ask(req: AskRequest):
-    print(f"[ASK] q={query!r} source_type={req.source_type!r} pccn_version={req.pccn_version!r} top_k={req.top_k}")
     t0 = time.time()
 
     query = req.query.strip()
+    print(f"[ASK] q={query!r} source_type={req.source_type!r} pccn_version={req.pccn_version!r} top_k={req.top_k}")
     print(f"[ASK] query reçue, top_k={req.top_k}")
 
     results = search_similar_documents(
