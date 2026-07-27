@@ -69,6 +69,7 @@ def search(req: SearchRequest):
 
 @app.post("/ask")
 def ask(req: AskRequest):
+    print(f"[ASK] source_type={req.source_type!r} pccn_version={req.pccn_version!r} top_k={req.top_k}")
     t0 = time.time()
 
     query = req.query.strip()
