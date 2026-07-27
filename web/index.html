@@ -169,12 +169,12 @@ document.getElementById("btnSearch").addEventListener("click", async () => {
 
             if (data.sources && data.sources.length > 0) {
                 const titre = data.sources.length > 1 ? "Sources :" : "Source :"
-                html += `<br><br><strong>${titre}</strong><ul>`
+                html += `<br><br><strong>${titre}</strong><ul style="list-style:none;padding-left:0">`
                 for (const src of data.sources) {
                     const page = src.page_num !== null && src.page_num !== undefined
                         ? ` - page ${src.page_num}`
                         : ""
-                    html += `<li>${src.source_path}${page}</li>`
+                    html += `<li>${src.index}) ${src.source_path}${page}</li>`
                 }
                 html += `</ul>`
             }
