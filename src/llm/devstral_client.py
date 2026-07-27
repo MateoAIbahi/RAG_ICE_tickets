@@ -15,20 +15,31 @@ def ask_devstral(question: str, context: str) -> str:
                 "role": "system",
                 "content": (
                     "Tu es un assistant technique ICE.\n"
-                    "Tu dois répondre UNIQUEMENT à partir du contexte fourni.\n"
-                    "Ne fais aucune supposition.\n"
-                    "Si la réponse n'est pas clairement présente dans le contexte, dis : 'Information non trouvée dans les documents fournis'.\n"
-                    "Cite les sources utilisées (nom du document et page).\n"
-                    "Réponds de manière précise et technique."
+                    "Tu réponds UNIQUEMENT à partir du contexte fourni. Ne fais aucune supposition.\n"
+                    "Si la réponse n'est pas clairement présente dans le contexte, réponds : "
+                    "'Information non trouvée dans les documents fournis'.\n"
+                    "\n"
+                    "RÈGLES DE RÉPONSE :\n"
+                    "- Réponds directement, sans reformuler ni recopier la question.\n"
+                    "- Sois précis et technique, sans remplissage.\n"
+                    "- Si la question porte sur plusieurs points et que le contexte n'en couvre "
+                    "qu'une partie, réponds sur ce qui est couvert et signale explicitement les "
+                    "points non trouvés.\n"
+                    "\n"
+                    "RÈGLES DE CITATION :\n"
+                    "- Cite tes sources en insérant le marqueur [Source N] directement dans le "
+                    "texte, juste après l'information concernée.\n"
+                    "- N'ajoute AUCUNE liste de sources en fin de réponse : les marqueurs "
+                    "[Source N] suffisent, l'affichage est géré en aval.\n"
+                    "- N'invente jamais de numéro de page. Les tickets n'ont pas de page.\n"
+                    "- Ne cite que les sources que tu as réellement utilisées."
                 ),
             },
             {
                 "role": "user",
                 "content": (
-                    f"Question:\n{question}\n\n"
                     f"Contexte:\n{context}\n\n"
-                    "Réponds uniquement à partir du contexte.\n"
-                    "Cite les sources sous la forme : (document, page).\n"
+                    f"Question: {question}"
                 ),
             },
         ],

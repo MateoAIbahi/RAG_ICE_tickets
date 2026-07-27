@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import List
 import time
+import re
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -46,6 +47,13 @@ def get_conn():
     db_url = os.getenv("RAG_DATABASE_URL", "postgresql://rag:ragpass@db:5432/ragdb")
     return psycopg2.connect(db_url)
 
+def build_source_label(r: dict) -> str:
+    if r["source_type"] in ("ticket", "mantis"):
+        return f"ticket {r['source_path']}"
+    label = r["source_path"] or "document"
+    if r.get("page_num") is not None:
+        label += f", page {r['page_num']}"
+    return label
 
 @app.get("/health")
 def health():
@@ -74,7 +82,8 @@ def ask(req: AskRequest):
     query = req.query.strip()
     print(f"[ASK] q={query!r} source_type={req.source_type!r} pccn_version={req.pccn_version!r} top_k={req.top_k}")
     print(f"[ASK] query reçue, top_k={req.top_k}")
-
+    if not query:
+        raise HTTPException(status_code=400, detail="Query vide")
     results = search_similar_documents(
         query=query,
         top_k=req.top_k,
@@ -82,14 +91,17 @@ def ask(req: AskRequest):
         pccn_version=req.pccn_version,
     )
     print(f"[ASK] retrieval terminé en {time.time() - t0:.2f}s, nb résultats={len(results)}")
-
+    if not results:
+        return {
+            "answer": "Aucun document ne correspond aux filtres sélectionnés.",
+            "sources_complete": True,
+            "sources": [],
+        }
     context_parts = []
     for i, r in enumerate(results, start=1):
-        source_label = f"{r['source_type']} | {r['source_path']}"
-        if r.get("page_num") is not None:
-            source_label += f" | page {r['page_num']}"
-        context_parts.append(f"[Source {i}] {source_label}\nContenu:\n{r['content']}")
-
+        context_parts.append(
+            f"[Source {i}] {build_source_label(r)}\nContenu:\n{r['content']}"
+        )
     context = "\n\n".join(context_parts)
 
     print(f"[ASK] contexte construit, taille caractères={len(context)}")
@@ -101,15 +113,32 @@ def ask(req: AskRequest):
     print(f"[ASK] devstral terminé en {time.time() - t1:.2f}s")
     print(f"[ASK] total /ask = {time.time() - t0:.2f}s")
 
+    cited = {int(n) for n in re.findall(r"\[Source\s+(\d+)\]", answer)}
+    cited = {n for n in cited if 1 <= n <= len(results)}
+
+    if cited:
+        selected = [(i, results[i - 1]) for i in sorted(cited)]
+        sources_complete = True
+    else:
+        # Le modèle n'a cité aucune source : on renvoie tout plutôt que rien,
+        # mais on le signale pour ne pas laisser croire à une attribution fiable.
+        selected = list(enumerate(results, start=1))
+        sources_complete = False
+
+    print(f"[ASK] sources citées={sorted(cited) or 'aucune'} / {len(results)} remontées")
+
     return {
         "answer": answer,
+        "sources_complete": sources_complete,
         "sources": [
             {
+                "index": i,
+                "label": build_source_label(r),
                 "source_type": r["source_type"],
                 "source_path": r["source_path"],
                 "page_num": r["page_num"],
             }
-            for r in results
+            for i, r in selected
         ],
     }
     
