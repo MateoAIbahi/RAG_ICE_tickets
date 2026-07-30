@@ -68,44 +68,84 @@ def search_similar_documents(
     top_k: int = 5,
     source_type: str | None = None,
     pccn_version: str | None = None,
+    candidates: int = 50,
+    rrf_k: int = 60,
 ):
     model, processor, device = get_model()
     query_embedding = embed_query(query, model, processor, device)
 
-    conn = get_rag_conn()
-    try:
-        sql = """
+    params = {
+        "qv": str(query_embedding),
+        "qtext": query,
+        "cand": candidates,
+        "rrf_k": rrf_k,
+        "top_k": top_k,
+    }
+
+    filters = ""
+    if source_type and source_type != "all":
+        filters += " AND source_type = %(source_type)s"
+        params["source_type"] = source_type
+
+    if pccn_version and pccn_version != "all":
+        filters += " AND (pccn_version = %(pccn_version)s OR pccn_version IS NULL)"
+        params["pccn_version"] = pccn_version
+
+    sql = f"""
+        WITH dense AS (
             SELECT
                 id,
-                source_type,
-                source_id,
-                source_path,
-                page_num,
-                chunk_id,
-                content,
-                metadata,
-                pccn_version,
-                pooled_embedding <=> %s::vector AS distance
+                pooled_embedding <=> %(qv)s::vector AS distance,
+                row_number() OVER (ORDER BY pooled_embedding <=> %(qv)s::vector) AS rnk
             FROM documents
             WHERE pooled_embedding IS NOT NULL
-        """
-        params = [str(query_embedding)]
+              {filters}
+            ORDER BY pooled_embedding <=> %(qv)s::vector
+            LIMIT %(cand)s
+        ),
+        lex AS (
+            SELECT
+                id,
+                row_number() OVER (ORDER BY ts_rank_cd(content_tsv, q) DESC) AS rnk
+            FROM documents, websearch_to_tsquery('french', %(qtext)s) q
+            WHERE content_tsv @@ q
+              {filters}
+            ORDER BY ts_rank_cd(content_tsv, q) DESC
+            LIMIT %(cand)s
+        ),
+        fused AS (
+            SELECT
+                COALESCE(d.id, l.id) AS id,
+                COALESCE(1.0 / (%(rrf_k)s + d.rnk), 0)
+                  + COALESCE(1.0 / (%(rrf_k)s + l.rnk), 0) AS rrf_score,
+                d.rnk AS dense_rank,
+                l.rnk AS lex_rank,
+                d.distance AS distance
+            FROM dense d
+            FULL OUTER JOIN lex l ON d.id = l.id
+        )
+        SELECT
+            doc.id,
+            doc.source_type,
+            doc.source_id,
+            doc.source_path,
+            doc.page_num,
+            doc.chunk_id,
+            doc.content,
+            doc.metadata,
+            doc.pccn_version,
+            f.rrf_score,
+            f.dense_rank,
+            f.lex_rank,
+            f.distance
+        FROM fused f
+        JOIN documents doc ON doc.id = f.id
+        ORDER BY f.rrf_score DESC, f.distance ASC NULLS LAST
+        LIMIT %(top_k)s
+    """
 
-        if source_type and source_type != "all":
-            sql += " AND source_type = %s"
-            params.append(source_type)
-
-        if pccn_version and pccn_version != "all":
-            sql += " AND (pccn_version = %s OR pccn_version IS NULL)"
-            params.append(pccn_version)
-
-        sql += """
-            ORDER BY pooled_embedding <=> %s::vector
-            LIMIT %s
-        """
-        params.append(str(query_embedding))
-        params.append(top_k)
-
+    conn = get_rag_conn()
+    try:
         with conn.cursor() as cur:
             cur.execute(sql, params)
             rows = cur.fetchall()
@@ -122,7 +162,10 @@ def search_similar_documents(
                 "content": row[6],
                 "metadata": row[7],
                 "pccn_version": row[8],
-                "distance": float(row[9]),
+                "rrf_score": float(row[9]),
+                "dense_rank": row[10],
+                "lex_rank": row[11],
+                "distance": float(row[12]) if row[12] is not None else None,
             })
 
         return results

@@ -90,6 +90,10 @@ def ask(req: AskRequest):
         source_type=req.source_type,
         pccn_version=req.pccn_version,
     )
+    print("[ASK] top:", [
+        (r["source_path"], r["page_num"], f"d={r['dense_rank']}", f"l={r['lex_rank']}")
+        for r in results[:5]
+    ])
     print(f"[ASK] retrieval terminé en {time.time() - t0:.2f}s, nb résultats={len(results)}")
     if not results:
         return {
