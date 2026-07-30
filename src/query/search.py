@@ -24,6 +24,35 @@ def extract_technical_tokens(query: str) -> list[str]:
             tokens.append(tok)                      # APT, SAA, TMS, HTB
     return tokens
 
+def select_discriminant_tokens(conn, tokens, filters, params, max_ratio=0.05):
+    """Ne garde que les tokens rares : au-delà de 5% du corpus, c'est du bruit."""
+    if not tokens:
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            f"SELECT count(*) FROM documents WHERE pooled_embedding IS NOT NULL {filters}",
+            params,
+        )
+        total = cur.fetchone()[0]
+        if not total:
+            return []
+        kept = []
+        for tok in tokens:
+            p = dict(params, tok=tok)
+            cur.execute(
+                f"""SELECT count(*) FROM documents
+                    WHERE pooled_embedding IS NOT NULL {filters}
+                      AND content_tsv @@ plainto_tsquery('french', %(tok)s)""",
+                p,
+            )
+            n = cur.fetchone()[0]
+            if 0 < n <= max_ratio * total:
+                kept.append(tok)
+            else:
+                print(f"[SEARCH] token écarté: {tok} ({n}/{total})")
+        return kept
+
+
 MODEL = None
 PROCESSOR = None
 DEVICE = None
@@ -93,86 +122,91 @@ def search_similar_documents(
     model, processor, device = get_model()
     query_embedding = embed_query(query, model, processor, device)
 
-    tech = extract_technical_tokens(query)
-    params = {
-        "qv": str(query_embedding),
-        "qlex": " ".join(tech) if tech else query,
-        "use_or": bool(tech),
-        "cand": candidates,
-        "rrf_k": rrf_k,
-        "top_k": top_k,
-    }
-    print(f"[SEARCH] tokens techniques={tech or 'aucun'}")
-
     filters = ""
+    filter_params = {}
     if source_type and source_type != "all":
         filters += " AND source_type = %(source_type)s"
-        params["source_type"] = source_type
+        filter_params["source_type"] = source_type
 
     if pccn_version and pccn_version != "all":
         filters += " AND (pccn_version = %(pccn_version)s OR pccn_version IS NULL)"
-        params["pccn_version"] = pccn_version
-
-    sql = f"""
-        WITH dense AS (
-            SELECT
-                id,
-                pooled_embedding <=> %(qv)s::vector AS distance,
-                row_number() OVER (ORDER BY pooled_embedding <=> %(qv)s::vector) AS rnk
-            FROM documents
-            WHERE pooled_embedding IS NOT NULL
-              {filters}
-            ORDER BY pooled_embedding <=> %(qv)s::vector
-            LIMIT %(cand)s
-        ),
-        lex AS (
-            SELECT
-                id,
-                row_number() OVER (ORDER BY ts_rank_cd(content_tsv, q.tq) DESC) AS rnk
-            FROM documents,
-                 (SELECT CASE WHEN %(use_or)s
-                              THEN replace(websearch_to_tsquery('french', %(qlex)s)::text,
-                                           '&', '|')::tsquery
-                              ELSE websearch_to_tsquery('french', %(qlex)s)
-                         END AS tq) q
-            WHERE content_tsv @@ q.tq
-              {filters}
-            ORDER BY ts_rank_cd(content_tsv, q.tq) DESC
-            LIMIT %(cand)s
-        ),
-        fused AS (
-            SELECT
-                COALESCE(d.id, l.id) AS id,
-                COALESCE(1.0 / (%(rrf_k)s + d.rnk), 0)
-                  + COALESCE(1.0 / (%(rrf_k)s + l.rnk), 0) AS rrf_score,
-                d.rnk AS dense_rank,
-                l.rnk AS lex_rank,
-                d.distance AS distance
-            FROM dense d
-            FULL OUTER JOIN lex l ON d.id = l.id
-        )
-        SELECT
-            doc.id,
-            doc.source_type,
-            doc.source_id,
-            doc.source_path,
-            doc.page_num,
-            doc.chunk_id,
-            doc.content,
-            doc.metadata,
-            doc.pccn_version,
-            f.rrf_score,
-            f.dense_rank,
-            f.lex_rank,
-            f.distance
-        FROM fused f
-        JOIN documents doc ON doc.id = f.id
-        ORDER BY f.rrf_score DESC, f.distance ASC NULLS LAST
-        LIMIT %(top_k)s
-    """
+        filter_params["pccn_version"] = pccn_version
 
     conn = get_rag_conn()
     try:
+        tech = select_discriminant_tokens(
+            conn, extract_technical_tokens(query), filters, filter_params
+        )
+        print(f"[SEARCH] tokens retenus={tech or 'aucun'}")
+
+        params = dict(filter_params)
+        params.update({
+            "qv": str(query_embedding),
+            "qlex": " ".join(tech) if tech else query,
+            "use_or": bool(tech),
+            "cand": candidates,
+            "rrf_k": rrf_k,
+            "top_k": top_k,
+        })
+
+        sql = f"""
+            WITH dense AS (
+                SELECT
+                    id,
+                    pooled_embedding <=> %(qv)s::vector AS distance,
+                    row_number() OVER (ORDER BY pooled_embedding <=> %(qv)s::vector) AS rnk
+                FROM documents
+                WHERE pooled_embedding IS NOT NULL
+                  {filters}
+                ORDER BY pooled_embedding <=> %(qv)s::vector
+                LIMIT %(cand)s
+            ),
+            lex AS (
+                SELECT
+                    id,
+                    row_number() OVER (ORDER BY ts_rank_cd(content_tsv, q.tq) DESC) AS rnk
+                FROM documents,
+                     (SELECT CASE WHEN %(use_or)s
+                                  THEN replace(websearch_to_tsquery('french', %(qlex)s)::text,
+                                               '&', '|')::tsquery
+                                  ELSE websearch_to_tsquery('french', %(qlex)s)
+                             END AS tq) q
+                WHERE content_tsv @@ q.tq
+                  {filters}
+                ORDER BY ts_rank_cd(content_tsv, q.tq) DESC
+                LIMIT %(cand)s
+            ),
+            fused AS (
+                SELECT
+                    COALESCE(d.id, l.id) AS id,
+                    COALESCE(1.0 / (%(rrf_k)s + d.rnk), 0)
+                      + COALESCE(1.0 / (%(rrf_k)s + l.rnk), 0) AS rrf_score,
+                    d.rnk AS dense_rank,
+                    l.rnk AS lex_rank,
+                    d.distance AS distance
+                FROM dense d
+                FULL OUTER JOIN lex l ON d.id = l.id
+            )
+            SELECT
+                doc.id,
+                doc.source_type,
+                doc.source_id,
+                doc.source_path,
+                doc.page_num,
+                doc.chunk_id,
+                doc.content,
+                doc.metadata,
+                doc.pccn_version,
+                f.rrf_score,
+                f.dense_rank,
+                f.lex_rank,
+                f.distance
+            FROM fused f
+            JOIN documents doc ON doc.id = f.id
+            ORDER BY f.rrf_score DESC, f.distance ASC NULLS LAST
+            LIMIT %(top_k)s
+        """
+
         with conn.cursor() as cur:
             cur.execute(sql, params)
             rows = cur.fetchall()
