@@ -46,7 +46,7 @@ def ask_devstral(question: str, context: str) -> str:
                 ),
             },
         ],
-        "temperature": 0.2,
+        "temperature": 0,
     }
 
     response = requests.post(url, json=payload, timeout=120)
