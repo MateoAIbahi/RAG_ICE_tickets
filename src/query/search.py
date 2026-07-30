@@ -118,6 +118,7 @@ def search_similar_documents(
     pccn_version: str | None = None,
     candidates: int = 50,
     rrf_k: int = 60,
+    guaranteed_dense: int = 6,
 ):
     model, processor, device = get_model()
     query_embedding = embed_query(query, model, processor, device)
@@ -147,6 +148,7 @@ def search_similar_documents(
             "cand": candidates,
             "rrf_k": rrf_k,
             "top_k": top_k,
+            "fetch": top_k * 3,
         })
 
         sql = f"""
@@ -204,7 +206,7 @@ def search_similar_documents(
             FROM fused f
             JOIN documents doc ON doc.id = f.id
             ORDER BY f.rrf_score DESC, f.distance ASC NULLS LAST
-            LIMIT %(top_k)s
+            LIMIT %(fetch)s
         """
 
         with conn.cursor() as cur:
@@ -229,6 +231,21 @@ def search_similar_documents(
                 "distance": float(row[12]) if row[12] is not None else None,
             })
 
-        return results
+        reserved = [
+            r for r in results
+            if r["dense_rank"] is not None and r["dense_rank"] <= guaranteed_dense
+        ]
+        selected = list(reserved)
+        seen = {r["id"] for r in selected}
+        for r in results:
+            if len(selected) >= top_k:
+                break
+            if r["id"] not in seen:
+                selected.append(r)
+                seen.add(r["id"])
+
+        selected.sort(key=lambda r: -r["rrf_score"])
+        print(f"[SEARCH] dense réservés={len(reserved)} / retenus={len(selected)}")
+        return selected
     finally:
         conn.close()
