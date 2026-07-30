@@ -1,4 +1,3 @@
-cat > src/ingestion/test_pdf.py << 'EOF'
 import os, psycopg2, torch
 from colpali_engine.models import ColQwen2_5, ColQwen2_5_Processor
 
