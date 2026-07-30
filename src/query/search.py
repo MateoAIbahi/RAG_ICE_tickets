@@ -3,7 +3,26 @@ import psycopg2
 import torch
 
 from colpali_engine.models.qwen2_5 import ColQwen2_5, ColQwen2_5_Processor
+import re
 
+TOKEN_RE = re.compile(r"[A-Za-z0-9_]+")
+
+
+def extract_technical_tokens(query: str) -> list[str]:
+    """Sigles, codes et références : ce que la recherche vectorielle rate."""
+    tokens = []
+    for tok in TOKEN_RE.findall(query):
+        has_digit = any(c.isdigit() for c in tok)
+        has_alpha = any(c.isalpha() for c in tok)
+        if "_" in tok:
+            tokens.append(tok)                      # DCLT_INTER_EQ_GRP
+        elif has_digit and has_alpha:
+            tokens.append(tok)                      # TR313, 3I0, TES606, NICER2
+        elif has_digit and len(tok) >= 3:
+            tokens.append(tok)                      # 1188, 2555
+        elif has_alpha and tok.isupper() and len(tok) >= 2:
+            tokens.append(tok)                      # APT, SAA, TMS, HTB
+    return tokens
 
 MODEL = None
 PROCESSOR = None
@@ -74,13 +93,16 @@ def search_similar_documents(
     model, processor, device = get_model()
     query_embedding = embed_query(query, model, processor, device)
 
+    tech = extract_technical_tokens(query)
     params = {
         "qv": str(query_embedding),
-        "qtext": query,
+        "qlex": " ".join(tech) if tech else query,
+        "use_or": bool(tech),
         "cand": candidates,
         "rrf_k": rrf_k,
         "top_k": top_k,
     }
+    print(f"[SEARCH] tokens techniques={tech or 'aucun'}")
 
     filters = ""
     if source_type and source_type != "all":
@@ -106,11 +128,16 @@ def search_similar_documents(
         lex AS (
             SELECT
                 id,
-                row_number() OVER (ORDER BY ts_rank_cd(content_tsv, q) DESC) AS rnk
-            FROM documents, websearch_to_tsquery('french', %(qtext)s) q
-            WHERE content_tsv @@ q
+                row_number() OVER (ORDER BY ts_rank_cd(content_tsv, q.tq) DESC) AS rnk
+            FROM documents,
+                 (SELECT CASE WHEN %(use_or)s
+                              THEN replace(websearch_to_tsquery('french', %(qlex)s)::text,
+                                           '&', '|')::tsquery
+                              ELSE websearch_to_tsquery('french', %(qlex)s)
+                         END AS tq) q
+            WHERE content_tsv @@ q.tq
               {filters}
-            ORDER BY ts_rank_cd(content_tsv, q) DESC
+            ORDER BY ts_rank_cd(content_tsv, q.tq) DESC
             LIMIT %(cand)s
         ),
         fused AS (
