@@ -92,7 +92,7 @@ def ask(req: AskRequest):
     )
     print("[ASK] top:", [
         (r["source_path"], r["page_num"], f"d={r['dense_rank']}", f"l={r['lex_rank']}")
-        for r in results[:5]
+        for r in results[:10]
     ])
     print(f"[ASK] retrieval terminé en {time.time() - t0:.2f}s, nb résultats={len(results)}")
     if not results:
