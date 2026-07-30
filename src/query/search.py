@@ -84,6 +84,7 @@ def search_similar_documents(
                 chunk_id,
                 content,
                 metadata,
+                pccn_version,
                 pooled_embedding <=> %s::vector AS distance
             FROM documents
             WHERE pooled_embedding IS NOT NULL
@@ -120,7 +121,8 @@ def search_similar_documents(
                 "chunk_id": row[5],
                 "content": row[6],
                 "metadata": row[7],
-                "distance": float(row[8]),
+                "pccn_version": row[8],
+                "distance": float(row[9]),
             })
 
         return results
