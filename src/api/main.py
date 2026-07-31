@@ -192,3 +192,28 @@ async def upload_pdf(
         "upload_dir": str(upload_path),
         "files": saved_files
     }
+
+@app.get("/documents")
+def list_documents():
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT source_path, pccn_version,
+                       count(*) AS chunks,
+                       min(created_at)::date AS ingere_le
+                FROM documents
+                WHERE source_type = 'pdf'
+                GROUP BY source_path, pccn_version
+                ORDER BY source_path
+            """)
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    return {
+        "documents": [
+            {"source_path": r[0], "pccn_version": r[1], "chunks": r[2], "ingere_le": str(r[3])}
+            for r in rows
+        ]
+    }
