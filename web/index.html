@@ -42,6 +42,7 @@ select {
 <div class="tabs">
 <button onclick="showTab('searchTab')">Recherche</button>
 <button onclick="askUploadPassword()">Ajouter des documents</button>
+<button onclick="showDocsTab()">Documents ingérés</button>
 </div>
 
 <div id="searchTab">
@@ -105,11 +106,17 @@ select {
 
 </div>
 
+<div id="docsTab" style="display:none">
+<h3>Documents ingérés</h3>
+<div class="box" id="docsOut">-</div>
+</div>
+
 <script>
 
 function showTab(tab) {
     document.getElementById("searchTab").style.display = "none"
     document.getElementById("uploadTab").style.display = "none"
+    document.getElementById("docsTab").style.display = "none"
     document.getElementById(tab).style.display = "block"
 }
 
@@ -229,6 +236,48 @@ document.getElementById("btnUpload").addEventListener("click", async () => {
         uploadOut.textContent = "❌ Erreur upload: " + e
     }
 })
+
+function showDocsTab() {
+    showTab("docsTab")
+    loadDocs()
+}
+
+async function loadDocs() {
+    const out = document.getElementById("docsOut")
+    out.textContent = "⏳ Chargement..."
+
+    try {
+        const resp = await fetch("/api/documents")
+        const data = await resp.json()
+        const docs = data.documents
+
+        if (!docs || docs.length === 0) {
+            out.textContent = "Aucun document ingéré."
+            return
+        }
+
+        const totalPages = docs.reduce((s, d) => s + d.chunks, 0)
+
+        let html = `<p>${docs.length} document(s) — ${totalPages} pages indexées</p>`
+        html += `<table border="1" cellpadding="6" style="border-collapse:collapse">`
+        html += `<tr><th>Document</th><th>Version</th><th>Pages</th><th>Ingéré le</th></tr>`
+
+        for (const d of docs) {
+            html += `<tr>`
+            html += `<td>${d.source_path}</td>`
+            html += `<td>${d.pccn_version || "-"}</td>`
+            html += `<td>${d.chunks}</td>`
+            html += `<td>${d.ingere_le}</td>`
+            html += `</tr>`
+        }
+
+        html += `</table>`
+        out.innerHTML = html
+
+    } catch (e) {
+        out.textContent = "❌ Erreur: " + e
+    }
+}
 
 </script>
 
