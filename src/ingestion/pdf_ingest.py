@@ -156,7 +156,8 @@ def insert_document(
                 content = EXCLUDED.content,
                 pooled_embedding = EXCLUDED.pooled_embedding,
                 pccn_version = EXCLUDED.pccn_version,
-                page_image_base64 = EXCLUDED.page_image_base64
+                page_image_base64 = EXCLUDED.page_image_base64,
+                deleted_at = NULL
             """,
             (
                 "pdf",

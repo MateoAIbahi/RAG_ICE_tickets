@@ -260,14 +260,16 @@ async function loadDocs() {
 
         let html = `<p>${docs.length} document(s) — ${totalPages} pages indexées</p>`
         html += `<table border="1" cellpadding="6" style="border-collapse:collapse">`
-        html += `<tr><th>Document</th><th>Version</th><th>Pages</th><th>Ingéré le</th></tr>`
+        html += `<tr><th>Document</th><th>Version</th><th>Pages</th><th>Ingéré le</th><th>Action</th></tr>`
 
         for (const d of docs) {
+            const safeId = d.source_id.replace(/'/g, "\\'")
             html += `<tr>`
             html += `<td>${d.source_path}</td>`
             html += `<td>${d.pccn_version || "-"}</td>`
             html += `<td>${d.chunks}</td>`
             html += `<td>${d.ingere_le}</td>`
+            html += `<td><button onclick="deleteDoc('${safeId}', ${d.chunks})">Supprimer</button></td>`
             html += `</tr>`
         }
 
@@ -276,6 +278,29 @@ async function loadDocs() {
 
     } catch (e) {
         out.textContent = "❌ Erreur: " + e
+    }
+}
+
+async function deleteDoc(sourceId, chunks) {
+    if (!confirm(`Supprimer "${sourceId}" (${chunks} pages) de la base de recherche ?\n\nLe document ne sera plus utilisé pour répondre aux questions.`)) return
+
+    const password = prompt("Mot de passe :")
+    if (!password) return
+
+    try {
+        const resp = await fetch("/api/documents/delete", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({source_id: sourceId, password: password})
+        })
+        if (!resp.ok) {
+            const err = await resp.json()
+            alert("❌ " + (err.detail || resp.status))
+            return
+        }
+        loadDocs()
+    } catch (e) {
+        alert("❌ Erreur: " + e)
     }
 }
 

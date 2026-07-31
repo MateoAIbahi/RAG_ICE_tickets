@@ -199,12 +199,12 @@ def list_documents():
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT source_path, pccn_version,
+                SELECT source_id, source_path, pccn_version,
                        count(*) AS chunks,
                        min(created_at)::date AS ingere_le
                 FROM documents
-                WHERE source_type = 'pdf'
-                GROUP BY source_path, pccn_version
+                WHERE source_type = 'pdf' AND deleted_at IS NULL
+                GROUP BY source_id, source_path, pccn_version
                 ORDER BY source_path
             """)
             rows = cur.fetchall()
@@ -213,7 +213,57 @@ def list_documents():
 
     return {
         "documents": [
-            {"source_path": r[0], "pccn_version": r[1], "chunks": r[2], "ingere_le": str(r[3])}
+            {"source_id": r[0], "source_path": r[1], "pccn_version": r[2],
+             "chunks": r[3], "ingere_le": str(r[4])}
             for r in rows
         ]
     }
+
+class DeleteDocRequest(BaseModel):
+    source_id: str
+    password: str
+
+
+@app.post("/documents/delete")
+def delete_document(req: DeleteDocRequest):
+    expected = os.getenv("ADMIN_PASSWORD", "icetickets")
+    if req.password != expected:
+        raise HTTPException(status_code=403, detail="Mot de passe incorrect")
+
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE documents SET deleted_at = now()
+                WHERE source_type = 'pdf' AND source_id = %s AND deleted_at IS NULL
+            """, (req.source_id,))
+            n = cur.rowcount
+        conn.commit()
+    finally:
+        conn.close()
+
+    if n == 0:
+        raise HTTPException(status_code=404, detail="Document introuvable")
+
+    print(f"[DOCS] Suppression logique: {req.source_id} ({n} pages)")
+    return {"deleted": req.source_id, "pages": n}
+
+
+@app.get("/documents/deleted")
+def list_deleted_documents():
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT source_id, source_path, count(*), max(deleted_at)::date
+                FROM documents
+                WHERE source_type = 'pdf' AND deleted_at IS NOT NULL
+                GROUP BY source_id, source_path ORDER BY 4 DESC
+            """)
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+    return {"documents": [
+        {"source_id": r[0], "source_path": r[1], "chunks": r[2], "supprime_le": str(r[3])}
+        for r in rows
+    ]}

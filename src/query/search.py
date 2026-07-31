@@ -123,7 +123,7 @@ def search_similar_documents(
     model, processor, device = get_model()
     query_embedding = embed_query(query, model, processor, device)
 
-    filters = ""
+    filters = " AND deleted_at IS NULL"
     filter_params = {}
     if source_type and source_type != "all":
         filters += " AND source_type = %(source_type)s"
