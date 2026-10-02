@@ -7,3 +7,4 @@ psycopg2-binary
 requests
 pymupdf
 transformers==4.50.0
+accelerate>=0.26.0

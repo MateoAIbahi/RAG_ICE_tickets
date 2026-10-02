@@ -3,3 +3,4 @@ psycopg2-binary
 pymysql
 pymupdf
 transformers==4.50.0
+accelerate>=0.26.0
