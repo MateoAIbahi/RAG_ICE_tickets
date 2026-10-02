@@ -1,0 +1,12 @@
+[Unit]
+Description=RAG ICE - ingestion hebdomadaire (documents + tickets Sylob/Mantis)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Adapter le chemin du dépôt
+WorkingDirectory=/opt/RAG_ICE_tickets
+ExecStart=/opt/RAG_ICE_tickets/deploy/run_ingestion.sh
+# La première réindexation complète peut être longue sur CPU
+TimeoutStartSec=12h

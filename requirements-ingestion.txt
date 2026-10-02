@@ -1,0 +1,5 @@
+# torch (CPU) est installé à part dans le Dockerfile
+psycopg2-binary
+pymysql
+pymupdf
+transformers==4.50.0

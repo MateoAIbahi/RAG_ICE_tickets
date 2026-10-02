@@ -1,0 +1,9 @@
+# torch (CPU) est installé à part dans le Dockerfile
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+psycopg2-binary
+requests
+pymupdf
+transformers==4.50.0

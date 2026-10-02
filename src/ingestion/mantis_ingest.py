@@ -1,309 +1,155 @@
+"""
+Tickets Mantis (MySQL).
+
+Corrections :
+- l'ancien code prenait 100 tickets puis enregistrait NOW() comme date de sync :
+  tous les tickets plus anciens non traités étaient perdus pour toujours ;
+- `exclude_ids` empêchait toute mise à jour d'un ticket déjà indexé (nouvelle
+  note, solution ajoutée...). Supprimé : le remplacement atomique gère les doublons ;
+- GROUP_CONCAT est limité à 1024 caractères par défaut dans MySQL : les notes
+  étaient tronquées silencieusement ;
+- curseur sur (last_updated brut en secondes, id) : pas de problème de fuseau
+  horaire entre MySQL et Postgres, pas d'ex aequo perdu entre deux lots ;
+- projet et version Mantis conservés en métadonnées (piste pour rattacher les
+  tickets à une version PCCN).
+"""
 import os
-import json
-from datetime import datetime
 
 import pymysql
-import psycopg2
-import torch
 
-from colpali_engine.models.qwen2_5 import ColQwen2_5, ColQwen2_5_Processor
+from src.common.db import get_conn
+from src.common.embedder import get_embedder
+from src.ingestion.store import get_cursor, replace_source, save_cursor
 
+SOURCE = "mantis"
+BATCH_SIZE = int(os.getenv("MANTIS_BATCH_SIZE", "200"))
 
-def get_rag_conn():
-    db_url = os.getenv("RAG_DATABASE_URL", "postgresql://rag:ragpass@db:5432/ragdb")
-    conn = psycopg2.connect(db_url)
-    conn.autocommit = True
-    return conn
+MANTIS_QUERY = """
+SELECT
+    b.id,
+    b.summary,
+    b.last_updated AS last_updated_raw,
+    FROM_UNIXTIME(b.date_submitted) AS date_submitted,
+    FROM_UNIXTIME(b.last_updated)   AS last_updated,
+    b.version,
+    p.name AS project,
+    bt.description,
+    bt.steps_to_reproduce,
+    bt.additional_information,
+    GROUP_CONCAT(
+        CONCAT('[Note du ', FROM_UNIXTIME(n.date_submitted), '] ', nt.note)
+        ORDER BY n.date_submitted ASC
+        SEPARATOR '\\n\\n'
+    ) AS notes
+FROM mantis_bug_table b
+LEFT JOIN mantis_project_table p      ON p.id = b.project_id
+LEFT JOIN mantis_bug_text_table bt    ON bt.id = b.bug_text_id
+LEFT JOIN mantis_bugnote_table n      ON n.bug_id = b.id
+LEFT JOIN mantis_bugnote_text_table nt ON nt.id = n.bugnote_text_id
+WHERE b.last_updated > %s OR (b.last_updated = %s AND b.id > %s)
+GROUP BY b.id, b.summary, b.last_updated, b.date_submitted, b.version, p.name,
+         bt.description, bt.steps_to_reproduce, bt.additional_information
+ORDER BY b.last_updated ASC, b.id ASC
+LIMIT %s
+"""
 
-def get_existing_mantis_ids():
-    conn = get_rag_conn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT source_id
-                FROM documents
-                WHERE source_type = 'mantis'
-                """
-            )
-            rows = cur.fetchall()
-
-        existing_ids = set()
-
-        for row in rows:
-            source_id = row[0]
-            if source_id and source_id.startswith("MANTIS-"):
-                try:
-                    existing_ids.add(int(source_id.replace("MANTIS-", "")))
-                except ValueError:
-                    pass
-
-        return existing_ids
-    finally:
-        conn.close()
 
 def get_mantis_conn():
-    host = os.getenv("MANTIS_DB_HOST", "mantis-testlink.ice.local")
-    port = int(os.getenv("MANTIS_DB_PORT", "3306"))
-    db = os.getenv("MANTIS_DB_NAME", "m-pccn")
-    user = os.getenv("MANTIS_DB_USER", "rag-tickets")
     password = os.getenv("MANTIS_DB_PASSWORD")
-
     if not password:
-        raise RuntimeError("MANTIS_DB_PASSWORD is missing")
-
-    return pymysql.connect(
-        host=host,
-        port=port,
-        user=user,
+        return None
+    conn = pymysql.connect(
+        host=os.getenv("MANTIS_DB_HOST", "mantis-testlink.ice.local"),
+        port=int(os.getenv("MANTIS_DB_PORT", "3306")),
+        user=os.getenv("MANTIS_DB_USER", "rag-tickets"),
         password=password,
-        database=db,
+        database=os.getenv("MANTIS_DB_NAME", "m-pccn"),
         charset="utf8mb4",
         cursorclass=pymysql.cursors.DictCursor,
         ssl_disabled=True,
     )
-
-
-MODEL = None
-PROCESSOR = None
-DEVICE = None
-
-def get_model():
-    global MODEL, PROCESSOR, DEVICE
-
-    if MODEL is None or PROCESSOR is None or DEVICE is None:
-        model_name = os.getenv("EMBED_MODEL", "Metric-AI/ColQwen2.5-3b-multilingual-v1.0")
-        device = os.getenv("DEVICE", "cpu")
-
-        print(f"[MANTIS] Loading model: {model_name}")
-        print(f"[MANTIS] Device: {device}")
-
-        MODEL = ColQwen2_5.from_pretrained(
-            model_name,
-            torch_dtype=torch.float32,
-            device_map=device,
-        ).eval()
-
-        PROCESSOR = ColQwen2_5_Processor.from_pretrained(model_name)
-        DEVICE = device
-
-    return MODEL, PROCESSOR, DEVICE
-
-
-def pool_embedding(embeddings: torch.Tensor):
-    if embeddings.dim() == 3:
-        pooled = embeddings.mean(dim=1).squeeze(0)
-    elif embeddings.dim() == 2:
-        pooled = embeddings.mean(dim=0)
-    else:
-        raise ValueError(f"Unexpected embedding shape: {tuple(embeddings.shape)}")
-
-    return pooled.detach().cpu().tolist()
-
-
-def embed_text(text: str, model, processor, device: str):
-    batch = processor.process_queries([text]).to(device)
-
-    with torch.no_grad():
-        embeddings = model(**batch)
-
-    return pool_embedding(embeddings)
-
-
-def fetch_mantis_tickets(last_sync=None, exclude_ids=None, limit=100):
-    sql = """
-        SELECT
-            b.id,
-            b.summary,
-            FROM_UNIXTIME(b.date_submitted) AS date_submitted,
-            FROM_UNIXTIME(b.last_updated) AS last_updated,
-            bt.description,
-            bt.steps_to_reproduce,
-            bt.additional_information,
-            GROUP_CONCAT(
-                CONCAT(
-                    '[Note du ', FROM_UNIXTIME(n.date_submitted), '] ',
-                    nt.note
-                )
-                ORDER BY n.date_submitted ASC
-                SEPARATOR '\\n\\n'
-            ) AS notes
-        FROM mantis_bug_table b
-        LEFT JOIN mantis_bug_text_table bt ON bt.id = b.bug_text_id
-        LEFT JOIN mantis_bugnote_table n ON n.bug_id = b.id
-        LEFT JOIN mantis_bugnote_text_table nt ON nt.id = n.bugnote_text_id
-    """
-
-    conditions = []
-    params = []
-
-    if last_sync is not None:
-        conditions.append("FROM_UNIXTIME(b.last_updated) > %s")
-        params.append(last_sync)
-
-    if exclude_ids:
-        placeholders = ",".join(["%s"] * len(exclude_ids))
-        conditions.append(f"b.id NOT IN ({placeholders})")
-        params.extend(list(exclude_ids))
-
-    if conditions:
-        sql += " WHERE " + " AND ".join(conditions)
-
-    sql += """
-        GROUP BY
-            b.id,
-            b.summary,
-            b.date_submitted,
-            b.last_updated,
-            bt.description,
-            bt.steps_to_reproduce,
-            bt.additional_information
-        ORDER BY b.last_updated ASC
-        LIMIT %s
-    """
-    params.append(limit)
-
-    conn = get_mantis_conn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            return cur.fetchall()
-    finally:
-        conn.close()
-
-
-def build_mantis_content(ticket: dict) -> str:
-    parts = [
-        f"Ticket Mantis: {ticket.get('id')}",
-        f"Résumé: {ticket.get('summary') or ''}",
-        f"Date création: {ticket.get('date_submitted') or ''}",
-        f"Dernière modification: {ticket.get('last_updated') or ''}",
-        "",
-        f"Description:\n{ticket.get('description') or ''}",
-        "",
-        f"Étapes pour reproduire:\n{ticket.get('steps_to_reproduce') or ''}",
-        "",
-        f"Informations complémentaires:\n{ticket.get('additional_information') or ''}",
-    ]
-
-    if ticket.get("notes"):
-        parts.extend([
-            "",
-            f"Notes / commentaires:\n{ticket.get('notes')}",
-        ])
-
-    return "\n".join(parts).strip()
-
-
-def insert_mantis_ticket(conn, ticket: dict, content: str, embedding: list):
-    source_id = f"MANTIS-{ticket['id']}"
-    source_path = f"MANTIS-{ticket['id']}"
-
-    metadata = {
-        "mantis_id": ticket.get("id"),
-        "summary": ticket.get("summary"),
-        "date_submitted": str(ticket.get("date_submitted")) if ticket.get("date_submitted") else None,
-        "last_updated": str(ticket.get("last_updated")) if ticket.get("last_updated") else None,
-        "source_table": "mantis_bug_table",
-    }
-
     with conn.cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO documents (
-                source_type,
-                source_id,
-                source_path,
-                page_num,
-                row_num,
-                chunk_id,
-                content,
-                metadata,
-                pooled_embedding,
-                pccn_version,
-                page_image_base64
-            )
-            VALUES (%s, %s, %s, NULL, NULL, %s, %s, %s::jsonb, %s::vector, NULL, NULL)
-            ON CONFLICT (source_type, source_id, chunk_id)
-            DO UPDATE SET
-                source_path = EXCLUDED.source_path,
-                content = EXCLUDED.content,
-                metadata = EXCLUDED.metadata,
-                pooled_embedding = EXCLUDED.pooled_embedding
-            """,
-            (
-                "mantis",
-                source_id,
-                source_path,
-                "main",
-                content,
-                json.dumps(metadata),
-                str(embedding),
-            ),
-        )
+        cur.execute("SET SESSION group_concat_max_len = 4194304")
+    return conn
 
 
-def ingest_mantis(last_sync=None):
-    if last_sync is None:
-        print("[MANTIS] First sync: fetching all Mantis tickets")
-    else:
-        print(f"[MANTIS] Incremental sync since {last_sync}")
+def build_header(t: dict) -> str:
+    h = f"Ticket Mantis {t['id']} : {t.get('summary') or ''}"
+    extra = [x for x in (t.get("project"), t.get("version") and f"version {t['version']}") if x]
+    if extra:
+        h += f" ({', '.join(extra)})"
+    return h
 
-    BATCH_SIZE = int(os.getenv("MANTIS_BATCH_SIZE", "100"))
 
-    existing_ids = get_existing_mantis_ids()
-    print(f"[MANTIS] {len(existing_ids)} ticket(s) already indexed")
+def build_body(t: dict) -> str:
+    sections = [
+        ("Description", t.get("description")),
+        ("Étapes pour reproduire", t.get("steps_to_reproduce")),
+        ("Informations complémentaires", t.get("additional_information")),
+        ("Notes / commentaires", t.get("notes")),
+    ]
+    return "\n\n".join(f"{name} :\n{val.strip()}" for name, val in sections if val and val.strip())
 
-    tickets = fetch_mantis_tickets(
-        last_sync=last_sync,
-        exclude_ids=existing_ids,
-        limit=BATCH_SIZE,
-    )
 
-    print(f"[MANTIS] {len(tickets)} ticket(s) fetched after excluding already indexed tickets")
-    print(f"[MANTIS] Batch limited to {len(tickets)} ticket(s)")
-    if not tickets:
-        print("[MANTIS] No tickets to ingest")
-        return 0
+def ingest_mantis() -> dict | str:
+    mantis = get_mantis_conn()
+    if mantis is None:
+        return "ignoré (MANTIS_DB_PASSWORD non configuré)"
 
-    print("[MANTIS] Before load_model")
-    model, processor, device = get_model()
-    print("[MANTIS] After load_model")
-
-    print("[MANTIS] Before get_rag_conn")
-    rag_conn = get_rag_conn()
-    print("[MANTIS] After get_rag_conn")
-
-    count = 0
-    print("[MANTIS] Before loop")
+    rag = get_conn(autocommit=False)
+    emb = get_embedder()
+    cursor = get_cursor(rag, SOURCE) or {"ts": 0, "id": 0}
+    print(f"[MANTIS] Reprise depuis {cursor}")
+    stats = {"indexes": 0, "lots": 0}
 
     try:
-        for ticket in tickets:
-            print(f"[MANTIS] Start ticket MANTIS-{ticket.get('id')}")
-            content = build_mantis_content(ticket)
-            print(f"[MANTIS] Content length={len(content)}")
+        while True:
+            with mantis.cursor() as cur:
+                cur.execute(MANTIS_QUERY, (cursor["ts"], cursor["ts"], cursor["id"], BATCH_SIZE))
+                rows = cur.fetchall()
+            if not rows:
+                break
 
-            if not content.strip():
-                print(f"[MANTIS] Skip empty ticket {ticket.get('id')}")
-                continue
-            print(f"[MANTIS] Embedding MANTIS-{ticket.get('id')} content length={len(content)} chars")
-            embedding = embed_text(content, model, processor, device)
+            todo = []
+            for t in rows:
+                header = build_header(t)
+                pieces = emb.chunk(build_body(t), header) or [""]
+                todo.append((t, header, pieces))
 
-            insert_mantis_ticket(
-                conn=rag_conn,
-                ticket=ticket,
-                content=content,
-                embedding=embedding,
-            )
+            texts = [f"{h}\n{p}".strip() for _, h, ps in todo for p in ps]
+            vectors = iter(emb.embed_documents(texts))
 
-            count += 1
-            print(f"[MANTIS] Insert OK: MANTIS-{ticket.get('id')}")
+            for t, header, pieces in todo:
+                sid = f"MANTIS-{t['id']}"
+                chunks = []
+                for i, p in enumerate(pieces):
+                    chunks.append({
+                        "source_path": sid,
+                        "chunk_id": f"c{i}",
+                        "content": f"{header}\n{p}".strip(),
+                        "embedding": next(vectors),
+                        "metadata": {
+                            "mantis_id": t["id"],
+                            "summary": t.get("summary"),
+                            "project": t.get("project"),
+                            "mantis_version": t.get("version"),
+                            "date_submitted": t.get("date_submitted"),
+                            "last_updated": t.get("last_updated"),
+                            "chunks": len(pieces),
+                            "source_table": "mantis_bug_table",
+                        },
+                    })
+                replace_source(rag, "mantis", sid, chunks)
+                stats["indexes"] += 1
 
-        return count
-
+            last = rows[-1]
+            cursor = {"ts": int(last["last_updated_raw"]), "id": int(last["id"])}
+            save_cursor(rag, SOURCE, cursor)
+            stats["lots"] += 1
+            print(f"[MANTIS] Lot {stats['lots']} : {len(rows)} ticket(s), curseur={cursor}")
     finally:
-        rag_conn.close()
+        mantis.close()
+        rag.close()
 
-if __name__ == "__main__":
-    count = ingest_mantis(last_sync=None)
-    print(f"[MANTIS] Manual ingestion done ({count} ticket(s))")
+    print(f"[MANTIS] Bilan : {stats}")
+    return stats

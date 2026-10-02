@@ -1,0 +1,10 @@
+[Unit]
+Description=RAG ICE - ingestion tous les vendredis à 20h
+
+[Timer]
+OnCalendar=Fri *-*-* 20:00:00
+# Si le serveur était éteint vendredi soir, rattrape au démarrage suivant
+Persistent=true
+
+[Install]
+WantedBy=timers.target

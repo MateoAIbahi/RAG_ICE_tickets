@@ -4,54 +4,57 @@ services:
     container_name: rag_db
     environment:
       POSTGRES_USER: rag
-      POSTGRES_PASSWORD: ragpass
+      # Ne s'applique qu'à la création du volume. Pour une base existante :
+      # ALTER USER rag PASSWORD '...'; puis mettre la même valeur dans .env
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ragpass}
       POSTGRES_DB: ragdb
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"   # plus exposé sur le réseau
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./src/db/init:/docker-entrypoint-initdb.d:ro
-  ingestion:
-    build:
-      context: .
-      dockerfile: deploy/ingestion.Dockerfile
-    environment:
-      RAG_DATABASE_URL: postgresql://rag:ragpass@db:5432/ragdb
-      ERP_DATABASE_URL: ${ERP_DATABASE_URL-}
-      EMBED_MODEL: Metric-AI/ColQwen2.5-3b-multilingual-v1.0
-      DEVICE: cpu
-      HF_HOME: /models/hf
-      PROBE_ONLY: "1"
-      HF_TOKEN : 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
-      SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
-      REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
-      CURL_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
-      HF_HUB_DISABLE_TELEMETRY: "1"
-      MANTIS_DB_HOST: mantis-testlink.ice.local
-      MANTIS_DB_PORT: "3306"
-      MANTIS_DB_NAME: m-pccn
-      MANTIS_DB_USER: rag-tickets
-      MANTIS_DB_PASSWORD: ${MANTIS_DB_PASSWORD}
-    volumes:
-      - /data/models:/models
-      -  /data/uploads:/data/uploads
-    depends_on:
-      - db
+    restart: unless-stopped
+
   api:
     build:
       context: .
       dockerfile: deploy/api.Dockerfile
     container_name: rag_api
+    env_file: .env
+    environment:
+      RAG_DATABASE_URL: postgresql://rag:${POSTGRES_PASSWORD:-ragpass}@db:5432/ragdb
+      HF_HOME: /models/hf
     ports:
       - "8000:8000"
     depends_on:
       - db
     restart: unless-stopped
-    environment:
-      HF_HOME: /models/hf
     volumes:
       - /data/uploads:/data/uploads
+      - /data/archive:/data/archive:ro
+      - /data/state:/data/state:ro      # drapeau du mode maintenance
       - /data/models:/models
+
+  # Job ponctuel : NE démarre PAS avec `up -d`. Lancé le vendredi soir par
+  # deploy/run_ingestion.sh (timer systemd ou cron), puis le conteneur s'arrête
+  # et libère sa RAM.
+  ingestion:
+    profiles: ["jobs"]
+    build:
+      context: .
+      dockerfile: deploy/ingestion.Dockerfile
+    env_file: .env
+    environment:
+      RAG_DATABASE_URL: postgresql://rag:${POSTGRES_PASSWORD:-ragpass}@db:5432/ragdb
+      HF_HOME: /models/hf
+    command: ["python", "-m", "src.ingestion.sync"]
+    restart: "no"
+    volumes:
+      - /data/uploads:/data/uploads
+      - /data/archive:/data/archive
+      - /data/models:/models
+    depends_on:
+      - db
+
   web:
     build:
       context: .
@@ -62,5 +65,6 @@ services:
     depends_on:
       - api
     restart: unless-stopped
+
 volumes:
   pgdata:

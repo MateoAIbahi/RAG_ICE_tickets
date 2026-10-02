@@ -1,9 +1,7 @@
-import os
-import psycopg2
-import torch
-
-from colpali_engine.models.qwen2_5 import ColQwen2_5, ColQwen2_5_Processor
 import re
+
+from src.common.db import get_conn, vector_literal
+from src.common.embedder import get_embedder
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9_]+")
 
@@ -30,7 +28,7 @@ def select_discriminant_tokens(conn, tokens, filters, params, max_ratio=0.05):
         return []
     with conn.cursor() as cur:
         cur.execute(
-            f"SELECT count(*) FROM documents WHERE pooled_embedding IS NOT NULL {filters}",
+            f"SELECT count(*) FROM documents WHERE true {filters}",
             params,
         )
         total = cur.fetchone()[0]
@@ -41,7 +39,7 @@ def select_discriminant_tokens(conn, tokens, filters, params, max_ratio=0.05):
             p = dict(params, tok=tok)
             cur.execute(
                 f"""SELECT count(*) FROM documents
-                    WHERE pooled_embedding IS NOT NULL {filters}
+                    WHERE true {filters}
                       AND content_tsv @@ plainto_tsquery('french', %(tok)s)""",
                 p,
             )
@@ -53,62 +51,8 @@ def select_discriminant_tokens(conn, tokens, filters, params, max_ratio=0.05):
         return kept
 
 
-MODEL = None
-PROCESSOR = None
-DEVICE = None
-
-
 def get_rag_conn():
-    db_url = os.getenv("RAG_DATABASE_URL", "postgresql://rag:ragpass@db:5432/ragdb")
-    conn = psycopg2.connect(db_url)
-    conn.autocommit = True
-    return conn
-
-
-def load_model():
-    model_name = os.getenv("EMBED_MODEL", "Metric-AI/ColQwen2.5-3b-multilingual-v1.0")
-    device = os.getenv("DEVICE", "cpu")
-
-    print(f"[QUERY] Loading model: {model_name}")
-    print(f"[QUERY] Device: {device}")
-
-    model = ColQwen2_5.from_pretrained(
-        model_name,
-        torch_dtype=torch.float32,
-        device_map=device,
-    ).eval()
-
-    processor = ColQwen2_5_Processor.from_pretrained(model_name)
-    return model, processor, device
-
-
-def get_model():
-    global MODEL, PROCESSOR, DEVICE
-
-    if MODEL is None or PROCESSOR is None or DEVICE is None:
-        MODEL, PROCESSOR, DEVICE = load_model()
-
-    return MODEL, PROCESSOR, DEVICE
-
-
-def pool_embedding(embeddings: torch.Tensor):
-    if embeddings.dim() == 3:
-        pooled = embeddings.mean(dim=1).squeeze(0)
-    elif embeddings.dim() == 2:
-        pooled = embeddings.mean(dim=0)
-    else:
-        raise ValueError(f"Unexpected embedding shape: {tuple(embeddings.shape)}")
-
-    return pooled.detach().cpu().tolist()
-
-
-def embed_query(query: str, model, processor, device: str):
-    batch = processor.process_queries([query]).to(device)
-
-    with torch.no_grad():
-        embeddings = model(**batch)
-
-    return pool_embedding(embeddings)
+    return get_conn(autocommit=True)
 
 
 def search_similar_documents(
@@ -116,12 +60,12 @@ def search_similar_documents(
     top_k: int = 5,
     source_type: str | None = None,
     pccn_version: str | None = None,
+    tranche: str | None = None,
     candidates: int = 50,
     rrf_k: int = 60,
     guaranteed_dense: int = 6,
 ):
-    model, processor, device = get_model()
-    query_embedding = embed_query(query, model, processor, device)
+    query_embedding = get_embedder().embed_query(query)
 
     filters = " AND deleted_at IS NULL"
     filter_params = {}
@@ -130,8 +74,16 @@ def search_similar_documents(
         filter_params["source_type"] = source_type
 
     if pccn_version and pccn_version != "all":
-        filters += " AND (pccn_version = %(pccn_version)s OR pccn_version IS NULL)"
+        # Les filtres version/tranche ne concernent QUE les documents :
+        # les tickets remontent uniquement selon leur pertinence.
+        filters += (" AND (source_type <> 'pdf' OR pccn_version = %(pccn_version)s"
+                    " OR pccn_version IS NULL)")
         filter_params["pccn_version"] = pccn_version
+
+    # Documents sans tranche (Dicodata, docs communs) visibles pour toute tranche.
+    if tranche and tranche != "all":
+        filters += " AND (source_type <> 'pdf' OR tranche = %(tranche)s OR tranche IS NULL)"
+        filter_params["tranche"] = tranche
 
     conn = get_rag_conn()
     try:
@@ -142,7 +94,7 @@ def search_similar_documents(
 
         params = dict(filter_params)
         params.update({
-            "qv": str(query_embedding),
+            "qv": vector_literal(query_embedding),
             "qlex": " ".join(tech) if tech else query,
             "use_or": bool(tech),
             "cand": candidates,
@@ -155,12 +107,12 @@ def search_similar_documents(
             WITH dense AS (
                 SELECT
                     id,
-                    pooled_embedding <=> %(qv)s::vector AS distance,
-                    row_number() OVER (ORDER BY pooled_embedding <=> %(qv)s::vector) AS rnk
+                    embedding <=> %(qv)s::vector AS distance,
+                    row_number() OVER (ORDER BY embedding <=> %(qv)s::vector) AS rnk
                 FROM documents
-                WHERE pooled_embedding IS NOT NULL
+                WHERE embedding IS NOT NULL
                   {filters}
-                ORDER BY pooled_embedding <=> %(qv)s::vector
+                ORDER BY embedding <=> %(qv)s::vector
                 LIMIT %(cand)s
             ),
             lex AS (
@@ -199,6 +151,8 @@ def search_similar_documents(
                 doc.content,
                 doc.metadata,
                 doc.pccn_version,
+                doc.tranche,
+                doc.dicodata_version,
                 f.rrf_score,
                 f.dense_rank,
                 f.lex_rank,
@@ -225,10 +179,12 @@ def search_similar_documents(
                 "content": row[6],
                 "metadata": row[7],
                 "pccn_version": row[8],
-                "rrf_score": float(row[9]),
-                "dense_rank": row[10],
-                "lex_rank": row[11],
-                "distance": float(row[12]) if row[12] is not None else None,
+                "tranche": row[9],
+                "dicodata_version": row[10],
+                "rrf_score": float(row[11]),
+                "dense_rank": row[12],
+                "lex_rank": row[13],
+                "distance": float(row[14]) if row[14] is not None else None,
             })
 
         reserved = [

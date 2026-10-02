@@ -6,32 +6,24 @@
 <title>RAG ICE</title>
 
 <style>
-body {
-    font-family: Arial;
-    max-width: 1000px;
-    margin: 40px auto;
-}
+body { font-family: Arial, sans-serif; max-width: 1000px; margin: 40px auto; padding: 0 16px; }
+textarea { width: 100%; height: 100px; }
+.box { background: #f5f5f5; padding: 12px; border-radius: 8px; margin-top: 10px; white-space: pre-wrap; }
+.box.html { white-space: normal; }
+.tabs button { margin-right: 10px; }
+select, input[type=text] { padding: 6px; }
+.filters { display: flex; flex-wrap: wrap; gap: 24px; }
+table { border-collapse: collapse; width: 100%; }
+td, th { border: 1px solid #ccc; padding: 6px; text-align: left; vertical-align: top; }
+.muted { color: #666; font-size: 0.9em; }
+.warn { color: #9a5b00; }
 
-textarea {
-    width: 100%;
-    height: 100px;
-}
-
-.box {
-    background: #f5f5f5;
-    padding: 12px;
-    border-radius: 8px;
-    margin-top: 10px;
-    white-space: pre-wrap;
-}
-
-.tabs button {
-    margin-right: 10px;
-}
-
-select {
-    padding: 6px;
-}
+#maintenance { display: none; margin-top: 80px; text-align: center; }
+#maintenance h2 { font-size: 1.6em; margin-bottom: 0.4em; }
+#maintenance .msg { max-width: 560px; margin: 0 auto; line-height: 1.5; }
+#maintenance .bar { max-width: 420px; height: 10px; margin: 24px auto 6px; background: #e3e3e3; border-radius: 5px; overflow: hidden; }
+#maintenance .bar div { height: 100%; width: 0; background: #2f6fb3; transition: width 0.6s; }
+@media (prefers-reduced-motion: reduce) { #maintenance .bar div { transition: none; } }
 </style>
 </head>
 
@@ -39,124 +31,226 @@ select {
 
 <h1>RAG ICE</h1>
 
+<div id="maintenance" role="status" aria-live="polite">
+<h2 id="mTitle">Service en maintenance</h2>
+<p class="msg" id="mMsg"></p>
+<div class="bar" id="mBar" hidden><div id="mFill"></div></div>
+<p class="muted" id="mProgress"></p>
+<p class="muted">Cette page se met à jour toute seule : inutile de la recharger.</p>
+</div>
+
+<div id="app">
 <div class="tabs">
 <button onclick="showTab('searchTab')">Recherche</button>
-<button onclick="askUploadPassword()">Ajouter des documents</button>
-<button onclick="showDocsTab()">Documents ingérés</button>
+<button onclick="openUploadTab()">Ajouter des documents</button>
+<button onclick="showDocsTab()">Documents</button>
 </div>
 
 <div id="searchTab">
 
-<p>Choisis la source :</p>
-
-<label><input type="checkbox" id="src_ticket" checked> Tickets</label>
-<label><input type="checkbox" id="src_pdf" checked> PDF</label>
+<div class="filters">
+<div>
+<p>Sources :</p>
+<label><input type="checkbox" id="src_ticket" checked> Tickets Sylob</label>
+<label><input type="checkbox" id="src_pdf" checked> Documents</label>
 <label><input type="checkbox" id="src_mantis" checked> Mantis</label>
+</div>
 
+<div>
 <p>Version PCCN :</p>
-
 <select id="pccn_version_search">
 <option value="">Toutes</option>
 <option value="V1">V1</option>
 <option value="V2">V2</option>
 <option value="V3">V3</option>
 </select>
+</div>
+
+<div>
+<p>Tranche :</p>
+<select id="tranche_search">
+<option value="">Toutes</option>
+<option value="AUTO">AUTO</option>
+<option value="TRA">TRA</option>
+<option value="RAME">RAME</option>
+</select>
+</div>
+</div>
 
 <p>Question :</p>
-
 <textarea id="question"></textarea>
-
 <br><br>
-
 <button id="btnSearch">Rechercher</button>
 
 <h3>Résultat</h3>
-
-<div class="box" id="searchOut">-</div>
+<div class="box html" id="searchOut">-</div>
 
 </div>
 
 <div id="uploadTab" style="display:none">
 
-<p>Ajouter des documents (.pdf, .doc, .docx, .odt) :</p>
+<p>Fichiers (.pdf, .doc, .docx, .odt, .rtf, .ppt, .pptx, .odp) :</p>
+<input type="file" id="docFiles" accept=".pdf,.doc,.docx,.odt,.rtf,.ppt,.pptx,.odp" multiple>
 
-<input
-    type="file"
-    id="docFiles"
-    accept=".pdf,.doc,.docx,.odt"
-    multiple
->
-
-<p>Version PCCN associée aux documents uploadés :</p>
-
+<div class="filters">
+<div>
+<p>Version PCCN :</p>
 <select id="pccn_version_upload">
 <option value="">Choisir une version</option>
 <option value="V1">V1</option>
 <option value="V2">V2</option>
 <option value="V3">V3</option>
 </select>
+</div>
 
-<br><br>
+<div>
+<p>Tranche :</p>
+<select id="tranche_upload">
+<option value="">Toutes les tranches (document commun)</option>
+<option value="AUTO">AUTO</option>
+<option value="TRA">TRA</option>
+<option value="RAME">RAME</option>
+</select>
+</div>
 
-<button id="btnUpload">Uploader les documents</button>
+<div>
+<p>Version Dicodata (si Dicodata) :</p>
+<input type="text" id="dicodata_upload" placeholder="ex. 3.2" size="8">
+</div>
+</div>
 
-<h3>Statut upload</h3>
+<p class="muted">Les fichiers sont intégrés à l'IA lors de l'ingestion hebdomadaire du vendredi soir.
+Les Dicodata s'appliquent à toutes les tranches de leur version PCCN.</p>
 
+<button id="btnUpload">Envoyer les fichiers</button>
+
+<h3>Statut</h3>
 <div class="box" id="uploadOut">-</div>
 
 </div>
 
 <div id="docsTab" style="display:none">
-<h3>Documents ingérés</h3>
-<div class="box" id="docsOut">-</div>
+<h3>En attente d'intégration</h3>
+<div class="box html" id="pendingOut">-</div>
+<h3>Documents intégrés</h3>
+<div class="box html" id="docsOut">-</div>
+<h3>Documents supprimés</h3>
+<div class="box html" id="deletedOut">-</div>
+</div>
 </div>
 
 <script>
+let adminPassword = null
+
+// MAINTENANCE
+// Affiché si le serveur est en mode maintenance OU s'il ne répond pas
+// (redémarrage, mise à jour). Vérifié au chargement puis toutes les 30 s.
+let inMaintenance = false
+
+function showMaintenance(title, message, progress) {
+    inMaintenance = true
+    document.getElementById("app").style.display = "none"
+    document.getElementById("maintenance").style.display = "block"
+    document.getElementById("mTitle").textContent = title
+    document.getElementById("mMsg").textContent = message
+    const bar = document.getElementById("mBar")
+    const txt = document.getElementById("mProgress")
+    if (progress && progress.percent != null) {
+        bar.hidden = false
+        document.getElementById("mFill").style.width = progress.percent + "%"
+        txt.textContent = `Avancement de la réintégration : ${progress.percent} % ` +
+            `(${progress.done.toLocaleString("fr-FR")} / ${progress.total.toLocaleString("fr-FR")} éléments)`
+    } else {
+        bar.hidden = true
+        txt.textContent = ""
+    }
+}
+
+async function checkStatus() {
+    try {
+        const ctrl = new AbortController()
+        const t = setTimeout(() => ctrl.abort(), 8000)
+        const resp = await fetch("/api/status", {signal: ctrl.signal, cache: "no-store"})
+        clearTimeout(t)
+        if (!resp.ok) throw new Error(resp.status)
+        const data = await resp.json()
+        if (data.maintenance) {
+            showMaintenance("Service en maintenance", data.message, data.progress)
+        } else if (inMaintenance) {
+            location.reload()  // retour à la normale : on recharge l'interface
+        }
+    } catch (e) {
+        showMaintenance("Service momentanément indisponible",
+            "Le serveur de l'assistant redémarre ou est en cours de mise à jour. " +
+            "Il sera de nouveau accessible dans quelques minutes.", null)
+    }
+}
+
+// Toute réponse 503 "maintenance" d'une action bascule sur l'écran de maintenance
+const _fetch = window.fetch
+window.fetch = async (...args) => {
+    const resp = await _fetch(...args)
+    if (resp.status === 503 && String(args[0]).startsWith("/api/") && !String(args[0]).startsWith("/api/status")) {
+        checkStatus()
+    }
+    return resp
+}
+
+checkStatus()
+setInterval(checkStatus, 30000)
+
+function esc(s) {
+    return String(s ?? "").replace(/[&<>"']/g, c => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[c])
+}
 
 function showTab(tab) {
-    document.getElementById("searchTab").style.display = "none"
-    document.getElementById("uploadTab").style.display = "none"
-    document.getElementById("docsTab").style.display = "none"
+    for (const id of ["searchTab", "uploadTab", "docsTab"]) {
+        document.getElementById(id).style.display = "none"
+    }
     document.getElementById(tab).style.display = "block"
 }
 
-function askUploadPassword() {
-    const password = prompt("Mot de passe requis pour ajouter des documents :")
-
-    if (password === "icetickets") {
-        showTab("uploadTab")
-    } else if (password !== null) {
-        alert("Mot de passe incorrect.")
+async function getPassword() {
+    if (adminPassword) return adminPassword
+    const pwd = prompt("Mot de passe :")
+    if (!pwd) return null
+    const resp = await fetch("/api/auth/check", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({password: pwd})
+    })
+    if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}))
+        alert(err.detail || "Mot de passe incorrect.")
+        return null
     }
+    adminPassword = pwd
+    return pwd
 }
-// SEARCH
+
+async function openUploadTab() {
+    if (await getPassword()) showTab("uploadTab")
+}
+
+// RECHERCHE
 const searchOut = document.getElementById("searchOut")
 
 document.getElementById("btnSearch").addEventListener("click", async () => {
     const q = document.getElementById("question").value.trim()
     const sources = []
-
     if (document.getElementById("src_ticket").checked) sources.push("ticket")
     if (document.getElementById("src_pdf").checked) sources.push("pdf")
     if (document.getElementById("src_mantis").checked) sources.push("mantis")
     const version = document.getElementById("pccn_version_search").value
+    const tranche = document.getElementById("tranche_search").value
 
-    let sourceType = "all"
-    if (sources.length === 1) {
-        sourceType = sources[0]
-    }
+    if (!q) { searchOut.textContent = "Saisissez une question."; return }
+    if (sources.length === 0) { searchOut.textContent = "Cochez au moins une source."; return }
 
-    if (!q) {
-        searchOut.textContent = "⚠️ Mets une question."
-        return
-    }
-
-    if (sources.length === 0) {
-        searchOut.textContent = "⚠️ Sélectionne au moins une source."
-        return
-    }
-
-    searchOut.textContent = "⏳ Recherche..."
+    const sourceType = sources.length === 1 ? sources[0] : "all"
+    searchOut.textContent = "Recherche en cours..."
 
     try {
         const resp = await fetch("/api/ask", {
@@ -165,145 +259,179 @@ document.getElementById("btnSearch").addEventListener("click", async () => {
             body: JSON.stringify({
                 query: q,
                 source_type: sourceType,
-                pccn_version: version || null
+                pccn_version: version || null,
+                tranche: tranche || null
             })
         })
-
         const data = await resp.json()
+        if (!data.answer) { searchOut.textContent = "Aucune réponse générée."; return }
 
-        if (data.answer) {
-            let html = `<strong>Réponse :</strong><br><br>${data.answer}`
-
-            if (data.sources && data.sources.length > 0) {
-                const titre = data.sources.length > 1 ? "Sources :" : "Source :"
-                html += `<br><br><strong>${titre}</strong><ul style="list-style:none;padding-left:0">`
-                for (const src of data.sources) {
-                    const page = src.page_num !== null && src.page_num !== undefined
-                        ? ` - page ${src.page_num}`
-                        : ""
-                    html += `<li>${src.index}) ${src.source_path}${page}</li>`
-                }
-                html += `</ul>`
+        let html = `<strong>Réponse :</strong><br><br>${esc(data.answer).replace(/\n/g, "<br>")}`
+        if (data.sources && data.sources.length > 0) {
+            html += `<br><br><strong>${data.sources.length > 1 ? "Sources :" : "Source :"}</strong>`
+            html += `<ul style="list-style:none;padding-left:0">`
+            for (const src of data.sources) {
+                const page = src.page_num != null ? ` - page ${src.page_num}` : ""
+                const ctx = [src.pccn_version, src.tranche, src.dicodata_version && "Dicodata " + src.dicodata_version]
+                    .filter(Boolean).join(", ")
+                html += `<li>${src.index}) ${esc(src.source_path)}${page}${ctx ? ` <span class="muted">(${esc(ctx)})</span>` : ""}</li>`
             }
-
-            searchOut.innerHTML = html
-        } else {
-            searchOut.textContent = "Aucune réponse générée."
+            html += `</ul>`
+            if (data.sources_complete === false) {
+                html += `<p class="warn">La réponse ne cite aucune source précise : toutes les sources consultées sont listées.</p>`
+            }
         }
-
+        searchOut.innerHTML = html
     } catch (e) {
-        searchOut.textContent = "❌ Erreur: " + e
+        searchOut.textContent = "Erreur : " + e
     }
 })
 
-// UPLOAD
+// AJOUT
 const uploadOut = document.getElementById("uploadOut")
 
 document.getElementById("btnUpload").addEventListener("click", async () => {
     const files = document.getElementById("docFiles").files
     const version = document.getElementById("pccn_version_upload").value
+    const tranche = document.getElementById("tranche_upload").value
+    const dicodata = document.getElementById("dicodata_upload").value.trim()
 
-    if (!files.length) {
-        uploadOut.textContent = "⚠️ Sélectionne au moins un document."
-        return
-    }
-
-    if (!version) {
-        uploadOut.textContent = "⚠️ Choisis une version PCCN."
-        return
-    }
+    if (!files.length) { uploadOut.textContent = "Sélectionnez au moins un fichier."; return }
+    if (!version) { uploadOut.textContent = "Choisissez une version PCCN."; return }
+    const pwd = await getPassword()
+    if (!pwd) return
 
     const formData = new FormData()
-
-    for (const file of files) {
-        formData.append("files", file)
-    }
-
+    for (const file of files) formData.append("files", file)
     formData.append("pccn_version", version)
+    formData.append("tranche", tranche)
+    formData.append("dicodata_version", dicodata)
+    formData.append("password", pwd)
 
-    uploadOut.textContent = "⏳ Upload en cours..."
-
+    uploadOut.textContent = "Envoi en cours..."
     try {
-        const resp = await fetch("/api/upload-pdf", {
-            method: "POST",
-            body: formData
-        })
-
+        const resp = await fetch("/api/upload-pdf", {method: "POST", body: formData})
         const data = await resp.json()
-        uploadOut.textContent = JSON.stringify(data, null, 2)
-
+        if (!resp.ok) {
+            if (resp.status === 403) adminPassword = null
+            uploadOut.textContent = "Erreur : " + (data.detail || resp.status)
+            return
+        }
+        uploadOut.textContent = `${data.message}\n\n${data.files.length} fichier(s) : ${data.files.join(", ")}`
+        document.getElementById("docFiles").value = ""
     } catch (e) {
-        uploadOut.textContent = "❌ Erreur upload: " + e
+        uploadOut.textContent = "Erreur d'envoi : " + e
     }
 })
 
+// DOCUMENTS
 function showDocsTab() {
     showTab("docsTab")
+    loadPending()
     loadDocs()
+    loadDeleted()
+}
+
+function ctxLabel(d) {
+    const t = d.tranche || "toutes"
+    return `${esc(d.pccn_version || "-")} / ${esc(t)}${d.dicodata_version ? " / Dicodata " + esc(d.dicodata_version) : ""}`
+}
+
+async function loadPending() {
+    const out = document.getElementById("pendingOut")
+    out.textContent = "Chargement..."
+    try {
+        const data = await (await fetch("/api/documents/pending")).json()
+        let html = ""
+        if (data.pending.length === 0) {
+            html += "<p>Aucun fichier en attente.</p>"
+        } else {
+            html += `<p>${data.pending.length} fichier(s) seront intégrés vendredi soir.</p><table>`
+            html += `<tr><th>Fichier</th><th>Version / tranche</th><th>Reçu le</th></tr>`
+            for (const d of data.pending) {
+                html += `<tr><td>${esc(d.file)}</td><td>${ctxLabel(d)}</td><td>${esc(d.recu_le || "-")}</td></tr>`
+            }
+            html += `</table>`
+        }
+        if (data.failed.length > 0) {
+            html += `<p class="warn">${data.failed.length} fichier(s) n'ont pas pu être intégrés :</p><table>`
+            html += `<tr><th>Fichier</th><th>Raison</th></tr>`
+            for (const f of data.failed) html += `<tr><td>${esc(f.file)}</td><td>${esc(f.raison)}</td></tr>`
+            html += `</table>`
+        }
+        out.innerHTML = html
+    } catch (e) {
+        out.textContent = "Erreur : " + e
+    }
 }
 
 async function loadDocs() {
     const out = document.getElementById("docsOut")
-    out.textContent = "⏳ Chargement..."
-
+    out.textContent = "Chargement..."
     try {
-        const resp = await fetch("/api/documents")
-        const data = await resp.json()
-        const docs = data.documents
-
-        if (!docs || docs.length === 0) {
-            out.textContent = "Aucun document ingéré."
-            return
-        }
-
-        const totalPages = docs.reduce((s, d) => s + d.chunks, 0)
-
-        let html = `<p>${docs.length} document(s) — ${totalPages} pages indexées</p>`
-        html += `<table border="1" cellpadding="6" style="border-collapse:collapse">`
-        html += `<tr><th>Document</th><th>Version</th><th>Pages</th><th>Ingéré le</th><th>Action</th></tr>`
-
-        for (const d of docs) {
-            const safeId = d.source_id.replace(/'/g, "\\'")
-            html += `<tr>`
-            html += `<td>${d.source_path}</td>`
-            html += `<td>${d.pccn_version || "-"}</td>`
-            html += `<td>${d.chunks}</td>`
-            html += `<td>${d.ingere_le}</td>`
-            html += `<td><button onclick="deleteDoc('${safeId}', ${d.chunks})">Supprimer</button></td>`
-            html += `</tr>`
-        }
-
+        const docs = (await (await fetch("/api/documents")).json()).documents
+        if (!docs || docs.length === 0) { out.textContent = "Aucun document intégré."; return }
+        const totalPages = docs.reduce((s, d) => s + d.pages, 0)
+        let html = `<p>${docs.length} document(s), ${totalPages} pages indexées</p><table>`
+        html += `<tr><th>Document</th><th>Version / tranche</th><th>Pages</th><th>Intégré le</th><th></th></tr>`
+        docs.forEach((d, i) => {
+            html += `<tr><td>${esc(d.source_path)}${d.legacy ? ' <span class="muted">(ancienne indexation)</span>' : ""}</td>`
+            html += `<td>${ctxLabel(d)}</td><td>${d.pages}</td><td>${esc(d.ingere_le)}</td>`
+            html += `<td><button data-i="${i}" class="del">Supprimer</button></td></tr>`
+        })
         html += `</table>`
         out.innerHTML = html
-
+        out.querySelectorAll("button.del").forEach(b =>
+            b.addEventListener("click", () => docAction("delete", docs[b.dataset.i])))
     } catch (e) {
-        out.textContent = "❌ Erreur: " + e
+        out.textContent = "Erreur : " + e
     }
 }
 
-async function deleteDoc(sourceId, chunks) {
-    if (!confirm(`Supprimer "${sourceId}" (${chunks} pages) de la base de recherche ?\n\nLe document ne sera plus utilisé pour répondre aux questions.`)) return
-
-    const password = prompt("Mot de passe :")
-    if (!password) return
-
+async function loadDeleted() {
+    const out = document.getElementById("deletedOut")
     try {
-        const resp = await fetch("/api/documents/delete", {
+        const docs = (await (await fetch("/api/documents/deleted")).json()).documents
+        if (!docs.length) { out.textContent = "Aucun document supprimé."; return }
+        let html = `<table><tr><th>Document</th><th>Version</th><th>Supprimé le</th><th></th></tr>`
+        docs.forEach((d, i) => {
+            html += `<tr><td>${esc(d.source_path)}</td><td>${esc(d.pccn_version || "-")}</td><td>${esc(d.supprime_le)}</td>`
+            html += `<td><button data-i="${i}" class="res">Restaurer</button></td></tr>`
+        })
+        html += `</table>`
+        out.innerHTML = html
+        out.querySelectorAll("button.res").forEach(b =>
+            b.addEventListener("click", () => docAction("restore", docs[b.dataset.i])))
+    } catch (e) {
+        out.textContent = "Erreur : " + e
+    }
+}
+
+async function docAction(action, doc) {
+    const question = action === "delete"
+        ? `Supprimer "${doc.source_path}" de la base de recherche ?\n\nL'IA ne l'utilisera plus. Il pourra être restauré depuis "Documents supprimés".`
+        : `Restaurer "${doc.source_path}" ?`
+    if (!confirm(question)) return
+    const pwd = await getPassword()
+    if (!pwd) return
+    try {
+        const resp = await fetch(`/api/documents/${action}`, {
             method: "POST",
             headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({source_id: sourceId, password: password})
+            body: JSON.stringify({source_id: doc.source_id, password: pwd})
         })
         if (!resp.ok) {
-            const err = await resp.json()
-            alert("❌ " + (err.detail || resp.status))
+            if (resp.status === 403) adminPassword = null
+            const err = await resp.json().catch(() => ({}))
+            alert(err.detail || resp.status)
             return
         }
         loadDocs()
+        loadDeleted()
     } catch (e) {
-        alert("❌ Erreur: " + e)
+        alert("Erreur : " + e)
     }
 }
-
 </script>
 
 </body>
